@@ -39,6 +39,11 @@ TTS-Handler/voices/*.prompt.txt
 !TTS-Handler/voices/kokoro_male/prompt.txt
 !TTS-Handler/voices/kokoro_alt/prompt.txt
 
+# Detected language cache (see voices.py) — same privacy rule as the
+# transcript it sits next to.
+TTS-Handler/voices/**/language.txt
+TTS-Handler/voices/*.language.txt
+
 # Generated audio output (dev/testing only)
 TTS-Handler/test_audio/
 test_audio/

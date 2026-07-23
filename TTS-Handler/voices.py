@@ -7,8 +7,12 @@ Voice registry: auto-discovers voices from the voices/ folder, two ways:
 Either way, a matching prompt.txt (subfolder form) or my_voice.prompt.txt
 (loose-file form, sitting next to the audio) supplies the exact transcript
 if you already know it. If it's missing, it's auto-transcribed once with
-faster-whisper (already a GPT-SoVITS dependency) and cached there, no
-manual transcription step either way.
+faster-whisper's multilingual model (already a GPT-SoVITS dependency, so
+non-English clips are detected and phonemized correctly rather than forced
+through an English-only transcript) and cached there alongside the
+detected language (language.txt / my_voice.language.txt), no manual
+transcription step either way. A hand-supplied prompt.txt with no matching
+language file is treated as English.
 
 GPT-SoVITS requires the reference clip to be 3-10 seconds long (this is a
 hard limit of its pretrained speaker-conditioning model, not a value this
@@ -74,6 +78,7 @@ class Voice:
     name: str
     ref_audio_path: str  # relative to PROJECT_ROOT, same convention as EmotionPreset
     prompt_text: str
+    prompt_lang: str = "en"
 
 
 def _get_whisper_model():
@@ -81,7 +86,10 @@ def _get_whisper_model():
     if _whisper_model is None:
         from faster_whisper import WhisperModel
 
-        _whisper_model = WhisperModel("base.en", compute_type="int8")
+        # Multilingual, not "base.en" — a reference clip isn't guaranteed to
+        # be English, and the .en variant can't detect that, it just forces
+        # a plausible-but-wrong English transcript on top of any language.
+        _whisper_model = WhisperModel("base", compute_type="int8")
     return _whisper_model
 
 
@@ -100,24 +108,28 @@ def _ensure_readable(audio_path: Path) -> Path:
     return converted_path
 
 
-def _transcribe(audio_path: Path) -> str:
+def _transcribe(audio_path: Path) -> tuple[str, str]:
+    """Returns (text, detected_language) — GPT-SoVITS needs the reference
+    clip's actual spoken language to phonemize prompt_text correctly, which
+    isn't necessarily English."""
     logger.info("Auto-transcribing %s ...", audio_path.name)
-    segments, _ = _get_whisper_model().transcribe(str(audio_path), vad_filter=True)
+    segments, info = _get_whisper_model().transcribe(str(audio_path), vad_filter=True)
     text = " ".join(segment.text.strip() for segment in segments).strip()
     if not text:
         raise RuntimeError(f"Whisper produced no transcript for {audio_path}")
-    logger.info("Transcribed %s -> %r", audio_path.name, text[:80])
-    return text
+    logger.info("Transcribed %s (lang=%s) -> %r", audio_path.name, info.language, text[:80])
+    return text, info.language
 
 
-def _find_natural_segment(audio_path: Path) -> tuple[float, float, str] | None:
+def _find_natural_segment(audio_path: Path) -> tuple[float, float, str, str] | None:
     """Looks for a contiguous run of real speech, using Whisper's own
     segment boundaries so any cut lands on a natural pause, never mid-word,
     whose total span fits inside GPT-SoVITS's 3-10 second window. Returns
-    (start_seconds, end_seconds, transcript_for_that_span), or None if no
-    such run exists (e.g. one long uninterrupted sentence with no pause
-    anywhere inside the window)."""
-    segments = list(_get_whisper_model().transcribe(str(audio_path), vad_filter=True)[0])
+    (start_seconds, end_seconds, transcript_for_that_span, detected_language),
+    or None if no such run exists (e.g. one long uninterrupted sentence with
+    no pause anywhere inside the window)."""
+    raw_segments, info = _get_whisper_model().transcribe(str(audio_path), vad_filter=True)
+    segments = list(raw_segments)
     for i in range(len(segments)):
         start = segments[i].start
         text_parts = []
@@ -127,7 +139,7 @@ def _find_natural_segment(audio_path: Path) -> tuple[float, float, str] | None:
             if span > MAX_REF_AUDIO_SECONDS:
                 break
             if span >= MIN_REF_AUDIO_SECONDS:
-                return start, seg.end, " ".join(text_parts).strip()
+                return start, seg.end, " ".join(text_parts).strip(), info.language
     return None
 
 
@@ -136,23 +148,23 @@ def _extract_segment(audio_path: Path, start: float, end: float, out_path: Path)
     sf.write(str(out_path), data[int(start * sr):int(end * sr)], sr)
 
 
-def _discover_candidates() -> list[tuple[str, list[Path], Path]]:
-    """Returns (name, audio_candidates, transcript_path) for every voice
-    found, subfolders and loose top-level files alike. audio_candidates is
-    every audio file present (sorted, so this is deterministic), a folder
-    (or a loose file with a previously cached auto-trim) can have more than
-    one, and list_voices() below tries each in order rather than assuming
-    the first one found is the usable one. Files this module generated
-    itself (*.autotrim.wav, *.converted.wav) never show up as their own
-    separate loose-file voice, only as a candidate for the original they
-    came from."""
+def _discover_candidates() -> list[tuple[str, list[Path], Path, Path]]:
+    """Returns (name, audio_candidates, transcript_path, language_path) for
+    every voice found, subfolders and loose top-level files alike.
+    audio_candidates is every audio file present (sorted, so this is
+    deterministic), a folder (or a loose file with a previously cached
+    auto-trim) can have more than one, and list_voices() below tries each in
+    order rather than assuming the first one found is the usable one. Files
+    this module generated itself (*.autotrim.wav, *.converted.wav) never
+    show up as their own separate loose-file voice, only as a candidate for
+    the original they came from."""
     candidates = []
     for entry in sorted(VOICES_DIR.iterdir()):
         if entry.is_dir():
             audio_files = sorted(f for f in entry.iterdir() if f.suffix.lower() in AUDIO_EXTENSIONS)
             if not audio_files:
                 continue
-            candidates.append((entry.name, audio_files, entry / "prompt.txt"))
+            candidates.append((entry.name, audio_files, entry / "prompt.txt", entry / "language.txt"))
         elif entry.name.endswith(GENERATED_SUFFIXES):
             continue
         elif entry.suffix.lower() in AUDIO_EXTENSIONS:
@@ -160,7 +172,7 @@ def _discover_candidates() -> list[tuple[str, list[Path], Path]]:
             cached_trim = VOICES_DIR / f"{entry.stem}{AUTOTRIM_SUFFIX}"
             if cached_trim.exists():
                 audio_candidates.insert(0, cached_trim)  # already in range, try it first
-            candidates.append((entry.stem, audio_candidates, entry.with_suffix(".prompt.txt")))
+            candidates.append((entry.stem, audio_candidates, entry.with_suffix(".prompt.txt"), entry.with_suffix(".language.txt")))
     return candidates
 
 
@@ -169,9 +181,9 @@ def list_voices() -> dict[str, Voice]:
     if not VOICES_DIR.exists():
         return voices
 
-    for name, audio_candidates, transcript_path in _discover_candidates():
+    for name, audio_candidates, transcript_path, language_path in _discover_candidates():
         try:
-            voice = _resolve_voice(name, audio_candidates, transcript_path)
+            voice = _resolve_voice(name, audio_candidates, transcript_path, language_path)
         except Exception as e:
             # A single broken voice (unreadable file, transcription
             # failure, anything unexpected) must never take down every
@@ -184,7 +196,7 @@ def list_voices() -> dict[str, Voice]:
     return voices
 
 
-def _resolve_voice(name: str, audio_candidates: list[Path], transcript_path: Path) -> Voice | None:
+def _resolve_voice(name: str, audio_candidates: list[Path], transcript_path: Path, language_path: Path) -> Voice | None:
     """Picks the first candidate already in range, or the first one that
     can be auto-trimmed into range, for one voice. Returns None (already
     logged) if nothing usable was found; raises if something unexpected
@@ -192,6 +204,7 @@ def _resolve_voice(name: str, audio_candidates: list[Path], transcript_path: Pat
     the real exception in the log instead of a generic reason."""
     audio_path = None
     prompt_text = None
+    prompt_lang = None
     rejected = []  # (raw_candidate, readable_candidate, duration)
 
     for raw_candidate in audio_candidates:
@@ -213,7 +226,7 @@ def _resolve_voice(name: str, audio_candidates: list[Path], transcript_path: Pat
             segment = _find_natural_segment(candidate)
             if segment is None:
                 continue
-            start, end, segment_text = segment
+            start, end, segment_text, segment_lang = segment
             # Cache path keyed on the ORIGINAL file's name, not the
             # (possibly transcoded) readable candidate's, so a later scan's
             # cache lookup in _discover_candidates still finds it.
@@ -222,7 +235,9 @@ def _resolve_voice(name: str, audio_candidates: list[Path], transcript_path: Pat
             logger.info("Auto-trimmed voice '%s': extracted %.1fs-%.1fs from %s", name, start, end, raw_candidate.name)
             audio_path = autotrim_path
             prompt_text = segment_text
+            prompt_lang = segment_lang
             transcript_path.write_text(prompt_text, encoding="utf-8")
+            language_path.write_text(prompt_lang, encoding="utf-8")
             break
 
     if audio_path is None:
@@ -245,14 +260,19 @@ def _resolve_voice(name: str, audio_candidates: list[Path], transcript_path: Pat
             # or PowerShell's Set-Content -Encoding utf8) while still
             # reading plain UTF-8 files with no BOM correctly.
             prompt_text = transcript_path.read_text(encoding="utf-8-sig").strip()
+            # A transcript supplied by hand (no matching language.txt) is
+            # assumed English; auto-transcribed ones always write one below.
+            prompt_lang = language_path.read_text(encoding="utf-8-sig").strip() if language_path.exists() else "en"
         else:
-            prompt_text = _transcribe(audio_path)
+            prompt_text, prompt_lang = _transcribe(audio_path)
             transcript_path.write_text(prompt_text, encoding="utf-8")
+            language_path.write_text(prompt_lang, encoding="utf-8")
 
     return Voice(
         name=name,
         ref_audio_path=str(audio_path.relative_to(PROJECT_ROOT)),
         prompt_text=prompt_text,
+        prompt_lang=prompt_lang,
     )
 
 

@@ -138,16 +138,18 @@ class TTSEngine:
             selected_voice = get_voice(voice)
             ref_audio_path = selected_voice.ref_audio_path
             prompt_text = selected_voice.prompt_text
+            prompt_lang = selected_voice.prompt_lang
         else:
             ref_audio_path = emotion.ref_audio_path
             prompt_text = emotion.prompt_text
+            prompt_lang = emotion.prompt_lang
 
         req = {
             "text": text,
             "text_lang": text_lang,
             "ref_audio_path": str(PROJECT_ROOT / ref_audio_path),
             "prompt_text": prompt_text,
-            "prompt_lang": emotion.prompt_lang,
+            "prompt_lang": prompt_lang,
             "top_k": emotion.top_k,
             "top_p": emotion.top_p,
             "temperature": emotion.temperature,

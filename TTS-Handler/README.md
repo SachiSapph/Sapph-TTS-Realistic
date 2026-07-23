@@ -82,11 +82,14 @@ Two ways, pick whichever's more convenient:
   ```
 
 Either way, that's it, no registration step. On first use it's
-auto-transcribed with `faster-whisper` and the transcript cached next to
-the audio (`my_voice.prompt.txt` for a loose file, `prompt.txt` inside the
-subfolder), so there's no manual labeling step. Restart the server (or
-just wait for the next request, voices are re-scanned each time) and it
-shows up in the voice list automatically.
+auto-transcribed with `faster-whisper`'s multilingual model, so a clip
+doesn't have to be in English, it's detected automatically. Both the
+transcript and detected language are cached next to the audio
+(`my_voice.prompt.txt` / `my_voice.language.txt` for a loose file,
+`prompt.txt` / `language.txt` inside the subfolder), so there's no manual
+labeling step. Restart the server (or just wait for the next request,
+voices are re-scanned each time) and it shows up in the voice list
+automatically.
 
 **The clip GPT-SoVITS actually uses must be 3-10 seconds long**, its own
 hard requirement, not something this project can widen. You don't have to
@@ -111,7 +114,8 @@ permissively-licensed source, or someone else's with their explicit
 consent.
 
 If auto-transcription gets something wrong, just edit the generated
-`prompt.txt` by hand, it's read from disk, not regenerated once it exists.
+`prompt.txt` (or `language.txt`, if it guessed the wrong language) by
+hand, both are read from disk, not regenerated once they exist.
 
 ## Using it
 
