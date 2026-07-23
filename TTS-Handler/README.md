@@ -10,10 +10,14 @@ own scripts), for a stronger match than zero-shot alone gives.
 Emotion is driven by **reference-clip prosody plus sampling parameters**,
 not a fixed emotion vector. [`emotion_vectors/presets.py`](emotion_vectors/presets.py)
 maps a name (`happy`, `sad`, `angry`, `afraid`, `disgusted`, `excited`,
-`playful`, `neutral`) to sampling params (temperature, speed, gain, a
-shimmer post-effect for fear) chosen from real acoustic-correlates-of-emotion
-research, not arbitrary guesses. See the comments in that file for the
-reasoning behind each one.
+`playful`, `exhausted`, `neutral`) to sampling params (temperature, speed,
+gain, a shimmer post-effect for fear) chosen from real acoustic-correlates-
+of-emotion research, not arbitrary guesses. See the comments in that file
+for the reasoning behind each one.
+
+A single reply can also shift tone across its own sentences instead of
+staying in one emotion the whole way through, see
+[Multiple emotions in one reply](#multiple-emotions-in-one-reply) below.
 
 ## Voices
 
@@ -98,13 +102,47 @@ Or as an HTTP API:
 uvicorn server:app --host 0.0.0.0 --port 3100
 ```
 ```
-POST /generate {"text": "Hello there!", "emotion": "happy", "voice": "kokoro_female"} -> WAV audio bytes
-GET  /voices    -> {"voices": ["kokoro_alt", "kokoro_female", "kokoro_male"]}
-GET  /health    -> {"status": "ok", "engine_loaded": true}
+POST /generate       {"text": "Hello there!", "emotion": "happy", "voice": "kokoro_female"} -> WAV audio bytes
+POST /generate_multi {"segments": [{"text": "...", "emotion": "..."}, ...], "voice": "kokoro_female"} -> WAV audio bytes
+GET  /voices         -> {"voices": ["kokoro_alt", "kokoro_female", "kokoro_male"]}
+GET  /health         -> {"status": "ok", "engine_loaded": true}
 ```
 
 See [`../TTS-Tester`](../TTS-Tester) for a full chat+voice demo built on top
 of this engine.
+
+## Multiple emotions in one reply
+
+A reply doesn't have to stay in one emotion for its whole length. Real
+speech often shifts tone across a sentence, relief giving way to
+exhaustion, excitement undercut by nervousness, and `TTSEngine.generate_multi()`
+supports that directly: give it an ordered list of `(text, emotion)`
+segments, same voice throughout, and it generates each one with its own
+preset and concatenates them with a short natural pause in between.
+
+```python
+audio_bytes = engine.generate_multi(
+    [
+        ("We actually won!", "happy"),
+        ("...though I am completely exhausted.", "exhausted"),
+    ],
+    voice="kokoro_female",
+)
+```
+
+This is for a tone shift **across sentences**, not for blending several
+emotions into a single instant, GPT-SoVITS's sampling knobs (temperature,
+speed, gain) aren't meaningfully additive that way, mixing them doesn't
+produce a believable blend, just an unpredictable one. A single segment
+is just a plain `generate()` call under the hood, no overhead for the
+common case.
+
+Whether to actually use more than one segment is a judgment call, most
+replies genuinely are one consistent tone, and should stay that way. See
+[`../TTS-Tester/chat_demo.py`](../TTS-Tester/chat_demo.py)'s `auto` mode
+for a working example of an LLM deciding this per reply: it's instructed
+to default to a single segment and only split when the reply's own content
+genuinely shifts tone, not as a routine gimmick.
 
 ## Notes on pronunciation
 

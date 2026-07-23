@@ -225,12 +225,13 @@ cd TTS-Handler
 uvicorn server:app --host 0.0.0.0 --port 3100
 ```
 ```
-POST /generate {"text": "Hello there!", "emotion": "happy", "voice": "kokoro_female"} -> WAV audio bytes
-GET  /voices    -> {"voices": ["kokoro_alt", "kokoro_female", "kokoro_male"]}
-GET  /health    -> {"status": "ok", "engine_loaded": true}
+POST /generate       {"text": "Hello there!", "emotion": "happy", "voice": "kokoro_female"} -> WAV audio bytes
+POST /generate_multi {"segments": [...], "voice": "kokoro_female"} -> WAV audio bytes, one reply that shifts tone across its own sentences
+GET  /voices         -> {"voices": ["kokoro_alt", "kokoro_female", "kokoro_male"]}
+GET  /health         -> {"status": "ok", "engine_loaded": true}
 ```
-Full details, including all available emotion presets, in
-[TTS-Handler's README](TTS-Handler/README.md).
+Full details, including all available emotion presets and how the
+multi-emotion segments work, in [TTS-Handler's README](TTS-Handler/README.md).
 
 ## Running the chat demo (TTS-Tester)
 

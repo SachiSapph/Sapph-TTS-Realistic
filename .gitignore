@@ -45,3 +45,6 @@ TTS-Tester/settings.local.json
 # OS junk
 .DS_Store
 Thumbs.db
+
+# Claude Code's own local instructions override, not part of this project
+CLAUDE.local.md

@@ -27,6 +27,16 @@ class GenerateRequest(BaseModel):
     voice: str | None = None  # name from GET /voices; None uses the emotion's default clip
 
 
+class EmotionSegment(BaseModel):
+    text: str
+    emotion: str
+
+
+class GenerateMultiRequest(BaseModel):
+    segments: list[EmotionSegment]
+    voice: str | None = None
+
+
 @app.on_event("startup")
 def startup():
     engine.load()
@@ -40,6 +50,21 @@ def generate(req: GenerateRequest):
         raise HTTPException(status_code=400, detail=str(e))
     except NotImplementedError as e:
         raise HTTPException(status_code=501, detail=str(e))
+    return Response(content=audio_bytes, media_type="audio/wav")
+
+
+@app.post("/generate_multi")
+def generate_multi(req: GenerateMultiRequest):
+    """For a single reply that shifts tone across its own sentences (e.g.
+    happy, then exhausted), not for blending multiple emotions into one
+    instant, see TTSEngine.generate_multi's docstring for why."""
+    try:
+        segments = [(s.text, s.emotion) for s in req.segments]
+        audio_bytes = engine.generate_multi(segments, voice=req.voice)
+    except KeyError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
     return Response(content=audio_bytes, media_type="audio/wav")
 
 

@@ -72,9 +72,13 @@ PERSONA_PROMPT = (
 AUTO_EMOTION_NAMES = list(PRESETS.keys())
 
 
-class AutoReply(BaseModel):
-    reply: str
+class EmotionSegment(BaseModel):
+    text: str
     emotion: str
+
+
+class AutoReply(BaseModel):
+    segments: list[EmotionSegment]
 
 
 app = FastAPI(title="Sapph-TTS Chat Demo")
@@ -220,16 +224,41 @@ def _call_gemini_with_fallback(contents: str, config: types.GenerateContentConfi
     )
 
 
-def _generate_reply(emotion: str) -> tuple[str, str]:
-    """Returns (reply_text, emotion_used)."""
+def _emotion_label(segments: list[tuple[str, str]]) -> str:
+    """e.g. [('Yes!', 'happy'), ('...I am wiped though.', 'exhausted')] ->
+    'happy+exhausted'. A single-segment reply just returns that one name."""
+    seen: list[str] = []
+    for _, emotion in segments:
+        if emotion not in seen:
+            seen.append(emotion)
+    return "+".join(seen)
+
+
+def _generate_reply(emotion: str) -> tuple[str, list[tuple[str, str]]]:
+    """Returns (reply_text, segments). segments is an ordered list of
+    (text, emotion) pairs, more than one only when auto mode's own judgment
+    calls for a tone shift within the reply, see PERSONA_PROMPT's
+    instructions below for the restraint this is meant to have."""
     history_lines = [f"{t['role']}: {t['text']}" for t in conversation_history[-10:]]
 
     if emotion == "auto":
         prompt = "\n".join(
             [
                 PERSONA_PROMPT,
-                "Also classify the emotional tone your reply should be "
-                f"spoken in, choosing exactly one of: {', '.join(AUTO_EMOTION_NAMES)}.",
+                "Also decide how to split your reply into one or more "
+                "emotionally-tagged segments for speech. Most replies "
+                "should be a SINGLE segment in a single tone, most short "
+                "conversational replies carry one consistent mood the "
+                "whole way through. Only use multiple segments when your "
+                "reply genuinely shifts tone or blends distinct feelings "
+                "across its own sentences (e.g. relief giving way to "
+                "exhaustion, excitement undercut by nervousness), that "
+                "should be occasional and true to the content, not a "
+                "default or a gimmick used every reply. Concatenating "
+                "every segment's text in order, joined by a single space, "
+                "must exactly reproduce your full reply, don't drop or "
+                "duplicate any of it. Each segment picks exactly one tone "
+                f"from: {', '.join(AUTO_EMOTION_NAMES)}.",
                 *history_lines,
             ]
         )
@@ -241,14 +270,22 @@ def _generate_reply(emotion: str) -> tuple[str, str]:
             ),
         )
         parsed: AutoReply = response.parsed
-        chosen_emotion = parsed.emotion if parsed.emotion in PRESETS else "neutral"
-        return parsed.reply.strip(), chosen_emotion
+        segments = [
+            (seg.text.strip(), seg.emotion if seg.emotion in PRESETS else "neutral")
+            for seg in parsed.segments
+            if seg.text.strip()
+        ]
+        if not segments:
+            segments = [("...", "neutral")]
+        reply_text = " ".join(text for text, _ in segments)
+        return reply_text, segments
 
     prompt = "\n".join(
         [PERSONA_PROMPT, f"(Reply in a {emotion} tone.)", *history_lines]
     )
     response = _call_gemini_with_fallback(prompt)
-    return response.text.strip(), emotion
+    reply_text = response.text.strip()
+    return reply_text, [(reply_text, emotion)]
 
 
 @app.post("/chat", response_model=ChatResponse)
@@ -262,14 +299,15 @@ def chat(req: ChatRequest):
     conversation_history.append({"role": "user", "text": req.message})
 
     try:
-        reply_text, emotion_used = _generate_reply(req.emotion)
+        reply_text, segments = _generate_reply(req.emotion)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Gemini request failed: {e}")
 
     conversation_history.append({"role": "assistant", "text": reply_text})
+    emotion_used = _emotion_label(segments)
 
     try:
-        audio_bytes = engine.generate(reply_text, emotion=emotion_used, voice=req.voice)
+        audio_bytes = engine.generate_multi(segments, voice=req.voice)
         # VoiceFixer is intentionally NOT applied here, measured directly:
         # once the reference clip itself is properly denoised, raw output
         # has a cleaner noise floor (315x peak-to-floor ratio) than

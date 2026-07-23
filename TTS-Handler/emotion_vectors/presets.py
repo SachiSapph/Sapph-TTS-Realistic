@@ -86,6 +86,18 @@ PRESETS: dict[str, EmotionPreset] = {
     "playful": EmotionPreset(
         ref_audio_path=_REF, prompt_text=_TEXT, temperature=1.2, speed_factor=1.1
     ),
+    # Exhaustion/fatigue: research on vocal correlates of tiredness points
+    # to reduced vocal energy and a slower, flatter delivery, distinct from
+    # sadness mainly in energy/loudness rather than pitch variance. Same
+    # low-temperature direction as "sad" for the flattening, slower still,
+    # and a real gain cut for genuinely quieter, lower-energy delivery.
+    "exhausted": EmotionPreset(
+        ref_audio_path=_REF,
+        prompt_text=_TEXT,
+        temperature=0.75,
+        speed_factor=0.75,
+        gain_db=-2.0,
+    ),
 }
 
 

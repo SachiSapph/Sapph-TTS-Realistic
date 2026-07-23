@@ -136,3 +136,51 @@ class TTSEngine:
         buffer = BytesIO()
         sf.write(buffer, audio_data, sample_rate, format="WAV")
         return buffer.getvalue()
+
+    def generate_multi(
+        self,
+        segments: list[tuple[str, str]],
+        voice: str | None = None,
+        text_lang: str = "en",
+    ) -> bytes:
+        """
+        Generates a single reply that shifts emotional tone across its own
+        sentences, e.g. relief giving way to exhaustion, rather than staying
+        in one tone the whole way through. Not for blending multiple
+        emotions into a single instant, GPT-SoVITS's sampling knobs
+        (temperature/speed/gain) aren't meaningfully additive that way, so
+        this generates each segment with its own emotion and concatenates
+        them in order, with a short natural pause between segments.
+
+        segments: ordered list of (text, emotion_name) pairs, same voice
+            throughout. A single segment is just a plain generate() call.
+        Returns: WAV audio bytes
+        """
+        if not segments:
+            raise ValueError("generate_multi needs at least one (text, emotion) segment")
+
+        if len(segments) == 1:
+            text, emotion = segments[0]
+            return self.generate(text, emotion=emotion, voice=voice, text_lang=text_lang)
+
+        chunks = []
+        sample_rate = None
+        for text, emotion in segments:
+            wav_bytes = self.generate(text, emotion=emotion, voice=voice, text_lang=text_lang)
+            data, sr = sf.read(BytesIO(wav_bytes), dtype="float32")
+            if sample_rate is None:
+                sample_rate = sr
+            elif sr != sample_rate:
+                raise RuntimeError(f"Segment sample rate mismatch: {sr} != {sample_rate}")
+            chunks.append(data)
+
+        # A brief silence between segments reads as a natural pause between
+        # sentences rather than an abrupt jump-cut in tone.
+        gap = np.zeros(int(0.15 * sample_rate), dtype=np.float32)
+        combined = chunks[0]
+        for chunk in chunks[1:]:
+            combined = np.concatenate([combined, gap, chunk])
+
+        buffer = BytesIO()
+        sf.write(buffer, combined, sample_rate, format="WAV")
+        return buffer.getvalue()

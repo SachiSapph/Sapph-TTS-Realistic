@@ -35,7 +35,7 @@ uvicorn chat_demo:app --host 127.0.0.1 --port 3001
 Then open `http://127.0.0.1:3001`.
 
 Click the gear icon to open Settings:
-- Paste in a Gemini API key (a link to get a free one is right above the
+- Paste in a Gemini API key (a link to get a free one is right below the
   field), saved locally to `settings.local.json`, gitignored, never
   committed, never leaves your machine.
 - **Test a voice**: pick any voice, default or one you dropped into
@@ -49,6 +49,15 @@ The two dropdowns in the header pick the voice and emotional tone used for
 the *next* chat reply. Set the emotion dropdown to `auto` and the LLM
 chooses the tone itself per reply based on the conversation; pin a specific
 one to keep every reply in that tone regardless of content.
+
+In `auto` mode, a reply can also shift tone partway through instead of
+staying in one emotion the whole time, e.g. relief giving way to
+exhaustion. This is occasional by design, not the default, most replies
+stay one consistent tone, and the LLM decides per reply based on the
+content, not a fixed rule. When it happens, the metadata under the reply
+shows it as a combined label like `(auto → excited+angry)`. See
+[TTS-Handler's README](../TTS-Handler/README.md#multiple-emotions-in-one-reply)
+for how this works under the hood.
 
 ## Notes
 
