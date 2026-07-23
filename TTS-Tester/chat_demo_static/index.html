@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Sapph-TTS Chat Demo</title>
+<style>
+  :root {
+    color-scheme: dark;
+  }
+  body {
+    margin: 0;
+    font-family: -apple-system, "Segoe UI", sans-serif;
+    background: #16161d;
+    color: #e8e8ef;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+  }
+  header {
+    padding: 14px 20px;
+    border-bottom: 1px solid #2a2a35;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  header h1 {
+    font-size: 16px;
+    margin: 0;
+    font-weight: 600;
+    color: #c9a6ff;
+  }
+  header .controls {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+  select, button {
+    background: #232330;
+    color: #e8e8ef;
+    border: 1px solid #3a3a48;
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 13px;
+  }
+  button {
+    cursor: pointer;
+  }
+  button:hover {
+    background: #2c2c3a;
+  }
+  #messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .msg {
+    max-width: 70%;
+    padding: 10px 14px;
+    border-radius: 14px;
+    line-height: 1.4;
+    font-size: 14px;
+  }
+  .msg.user {
+    align-self: flex-end;
+    background: #4a3b6b;
+    border-bottom-right-radius: 3px;
+  }
+  .msg.assistant {
+    align-self: flex-start;
+    background: #232330;
+    border-bottom-left-radius: 3px;
+  }
+  .msg .meta {
+    font-size: 11px;
+    opacity: 0.55;
+    margin-top: 4px;
+  }
+  .msg.pending {
+    opacity: 0.5;
+    font-style: italic;
+  }
+  footer {
+    border-top: 1px solid #2a2a35;
+    padding: 14px 20px;
+    display: flex;
+    gap: 10px;
+  }
+  #input {
+    flex: 1;
+    background: #232330;
+    color: #e8e8ef;
+    border: 1px solid #3a3a48;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 14px;
+  }
+  #input:focus {
+    outline: 2px solid #c9a6ff;
+  }
+  #send {
+    background: #7c5cbf;
+    border: none;
+    font-weight: 600;
+  }
+  #send:hover {
+    background: #8f6dd6;
+  }
+  #send:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+  #gear {
+    font-size: 16px;
+    line-height: 1;
+    padding: 6px 9px;
+  }
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+  }
+  .modal-backdrop.open {
+    display: flex;
+  }
+  .modal {
+    background: #1e1e28;
+    border: 1px solid #3a3a48;
+    border-radius: 12px;
+    padding: 22px;
+    width: 360px;
+    max-width: calc(100vw - 40px);
+  }
+  .modal h2 {
+    margin: 0 0 16px;
+    font-size: 15px;
+    color: #c9a6ff;
+  }
+  .field {
+    margin-bottom: 14px;
+  }
+  .field label {
+    display: block;
+    font-size: 12px;
+    opacity: 0.7;
+    margin-bottom: 6px;
+  }
+  .field input, .field select {
+    width: 100%;
+    box-sizing: border-box;
+    background: #232330;
+    color: #e8e8ef;
+    border: 1px solid #3a3a48;
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 13px;
+  }
+  .field input:focus, .field select:focus {
+    outline: 2px solid #c9a6ff;
+  }
+  .field .hint {
+    font-size: 11px;
+    opacity: 0.5;
+    margin-top: 5px;
+  }
+  .modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 18px;
+  }
+  #settings-status {
+    font-size: 12px;
+    margin-top: 10px;
+    min-height: 16px;
+  }
+  #settings-status.ok { color: #7fd894; }
+  #settings-status.err { color: #ff8a8a; }
+</style>
+</head>
+<body>
+  <header>
+    <h1>Sapph-TTS Chat Demo</h1>
+    <div class="controls">
+      <label for="emotion" style="font-size: 12px; opacity: 0.7;">Voice tone</label>
+      <select id="emotion"></select>
+      <button id="clear">Clear chat</button>
+      <button id="gear" title="Settings" aria-label="Open settings">⚙</button>
+    </div>
+  </header>
+
+  <div class="modal-backdrop" id="modal-backdrop">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <h2 id="modal-title">Settings</h2>
+      <div class="field">
+        <label for="api-key">Gemini API key</label>
+        <input id="api-key" type="password" placeholder="Enter to update, leave blank to keep current" autocomplete="off">
+        <div class="hint" id="api-key-hint">No key set yet.</div>
+      </div>
+      <div class="field">
+        <label for="default-emotion">Default voice tone</label>
+        <select id="default-emotion"></select>
+      </div>
+      <div id="settings-status"></div>
+      <div class="modal-actions">
+        <button id="settings-cancel">Cancel</button>
+        <button id="settings-save">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="messages"></div>
+
+  <footer>
+    <input id="input" type="text" placeholder="Say something to Sapph..." autocomplete="off">
+    <button id="send">Send</button>
+  </footer>
+
+<script>
+const messagesEl = document.getElementById('messages');
+const inputEl = document.getElementById('input');
+const sendEl = document.getElementById('send');
+const emotionEl = document.getElementById('emotion');
+const clearEl = document.getElementById('clear');
+const gearEl = document.getElementById('gear');
+const modalBackdrop = document.getElementById('modal-backdrop');
+const apiKeyEl = document.getElementById('api-key');
+const apiKeyHintEl = document.getElementById('api-key-hint');
+const defaultEmotionEl = document.getElementById('default-emotion');
+const settingsStatusEl = document.getElementById('settings-status');
+const settingsCancelEl = document.getElementById('settings-cancel');
+const settingsSaveEl = document.getElementById('settings-save');
+
+let emotionNames = [];
+
+async function loadEmotions() {
+  const res = await fetch('/emotions');
+  const data = await res.json();
+  emotionNames = data.emotions;
+  emotionEl.innerHTML = emotionNames.map(e => `<option value="${e}">${e}</option>`).join('');
+  defaultEmotionEl.innerHTML = emotionEl.innerHTML;
+}
+
+async function openSettings() {
+  const res = await fetch('/settings');
+  const data = await res.json();
+  apiKeyEl.value = '';
+  apiKeyHintEl.textContent = data.gemini_api_key_set
+    ? `Current key ends in ${data.gemini_api_key_masked}`
+    : 'No key set yet.';
+  defaultEmotionEl.value = data.default_emotion;
+  emotionEl.value = data.default_emotion;
+  settingsStatusEl.textContent = '';
+  settingsStatusEl.className = '';
+  modalBackdrop.classList.add('open');
+  apiKeyEl.focus();
+}
+
+function closeSettings() {
+  modalBackdrop.classList.remove('open');
+}
+
+async function saveSettings() {
+  settingsSaveEl.disabled = true;
+  try {
+    const res = await fetch('/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        gemini_api_key: apiKeyEl.value || null,
+        default_emotion: defaultEmotionEl.value
+      })
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    settingsStatusEl.textContent = 'Saved.';
+    settingsStatusEl.className = 'ok';
+    emotionEl.value = defaultEmotionEl.value;
+    setTimeout(closeSettings, 700);
+  } catch (e) {
+    settingsStatusEl.textContent = `Error: ${e.message}`;
+    settingsStatusEl.className = 'err';
+  } finally {
+    settingsSaveEl.disabled = false;
+  }
+}
+
+gearEl.addEventListener('click', openSettings);
+settingsCancelEl.addEventListener('click', closeSettings);
+settingsSaveEl.addEventListener('click', saveSettings);
+modalBackdrop.addEventListener('click', (e) => {
+  if (e.target === modalBackdrop) closeSettings();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && modalBackdrop.classList.contains('open')) closeSettings();
+});
+
+function addMessage(role, text, pending = false) {
+  const div = document.createElement('div');
+  div.className = `msg ${role}` + (pending ? ' pending' : '');
+  div.textContent = text;
+  messagesEl.appendChild(div);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+  return div;
+}
+
+async function sendMessage() {
+  const text = inputEl.value.trim();
+  if (!text) return;
+  inputEl.value = '';
+  sendEl.disabled = true;
+
+  addMessage('user', text);
+  const pendingDiv = addMessage('assistant', 'thinking...', true);
+
+  try {
+    const res = await fetch('/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: text, emotion: emotionEl.value })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${res.status}`);
+    }
+    const data = await res.json();
+    pendingDiv.classList.remove('pending');
+    pendingDiv.textContent = data.reply_text;
+
+    const meta = document.createElement('div');
+    meta.className = 'meta';
+    meta.textContent = emotionEl.value === 'auto'
+      ? `(auto → ${data.emotion_used})`
+      : `(${data.emotion_used})`;
+    pendingDiv.appendChild(meta);
+
+    const audio = new Audio(data.audio_url + '?t=' + Date.now());
+    audio.play().catch(() => {});
+  } catch (e) {
+    pendingDiv.classList.remove('pending');
+    pendingDiv.textContent = `Error: ${e.message}`;
+  } finally {
+    sendEl.disabled = false;
+    inputEl.focus();
+  }
+}
+
+sendEl.addEventListener('click', sendMessage);
+inputEl.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') sendMessage();
+});
+clearEl.addEventListener('click', async () => {
+  await fetch('/clear', { method: 'POST' });
+  messagesEl.innerHTML = '';
+});
+
+loadEmotions();
+inputEl.focus();
+</script>
+</body>
+</html>

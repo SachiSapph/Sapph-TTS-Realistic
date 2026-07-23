@@ -1,0 +1,7 @@
+# TTS-Tester's own deps. It also imports TTS-Handler directly (as a sibling
+# folder, see chat_demo.py) — install TTS-Handler/requirements.txt too.
+
+fastapi
+uvicorn[standard]
+pydantic
+google-genai

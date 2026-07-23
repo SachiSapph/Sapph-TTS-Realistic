@@ -1,0 +1,31 @@
+# Python environment (shared by TTS-Handler and TTS-Tester)
+.venv/
+__pycache__/
+*.pyc
+
+# Vendored upstream repo (clone fresh — see TTS-Handler/README.md, not ours to version)
+TTS-Handler/GPT-SoVITS/
+
+# Model weights / checkpoints — never commit these
+*.ckpt
+*.pth
+
+# Voice reference audio — never upload actual voice recordings.
+# Keep the folder structure (so it's obvious where a voice goes), drop the audio.
+TTS-Handler/voices/**/*.wav
+TTS-Handler/voices/**/*.mp3
+TTS-Handler/voices/**/*.m4a
+TTS-Handler/voices/**/*.flac
+!TTS-Handler/voices/**/.gitkeep
+
+# Generated audio output (dev/testing only)
+TTS-Handler/test_audio/
+test_audio/
+
+# Secrets — never commit API keys
+.env
+TTS-Tester/settings.local.json
+
+# OS junk
+.DS_Store
+Thumbs.db
