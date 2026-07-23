@@ -86,15 +86,23 @@ subfolder), so there's no manual labeling step. Restart the server (or
 just wait for the next request, voices are re-scanned each time) and it
 shows up in the voice list automatically.
 
-**The clip must be 3-10 seconds long**, GPT-SoVITS's own hard requirement.
-Anything outside that range is skipped at startup with a warning in the
-console (it just won't show up as a voice option, rather than failing
-later when you try to use it) so check there if a voice you added seems to
-be missing. Use a clean, natural, unspliced single continuous utterance,
-don't concatenate different sentences together to hit the minimum length,
-that produces muddled output, pad with trailing silence instead if your
-clip is a little short. Only add a voice you actually have the rights to
-use: your own voice, a permissively-licensed source, or someone else's with their
+**The clip GPT-SoVITS actually uses must be 3-10 seconds long**, its own
+hard requirement, not something this project can widen. You don't have to
+pre-trim it yourself though: drop in anything up to about a minute long
+(an ordinary voice memo is fine) and, if the whole thing is outside the
+3-10s window, a natural speech pause inside that window is found
+automatically (using real pause boundaries, never a mid-word cut) and
+that segment is extracted to a cached `*.autotrim.wav` file next to it, so
+it just works without external audio editing. A subfolder with more than
+one audio file (e.g. a full recording alongside an already-trimmed
+segment) picks whichever one actually fits, not just the first file found.
+
+If nothing works, e.g. the whole clip is one uninterrupted sentence
+longer than 10 seconds with no pause anywhere, or it's over a minute
+long, it's skipped at startup with a warning in the console explaining
+why, rather than failing later when you try to use it, check there if a
+voice you added seems to be missing. Only add a voice you actually have
+the rights to use: your own voice, a permissively-licensed source, or someone else's with their
 explicit consent.
 
 If auto-transcription gets something wrong, just edit the generated
