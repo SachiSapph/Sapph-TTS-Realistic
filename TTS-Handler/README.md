@@ -67,17 +67,24 @@ engine.generate("Hello there!", emotion="happy", voice="kokoro_male")
 
 ## Adding a voice
 
-Drop an audio file (wav/mp3/m4a/flac/ogg) into `voices/<your_voice_name>/`:
+Two ways, pick whichever's more convenient:
 
-```
-voices/
-└── my_voice/
-    └── reference.wav
-```
+- **Drag an audio file straight into `voices/`**, named however you want the
+  voice to show up: `voices/my_voice.wav` (wav/mp3/m4a/flac/ogg all work).
+- **Or give it its own subfolder**, useful if you want to keep a
+  hand-written transcript alongside it:
+  ```
+  voices/
+  └── my_voice/
+      └── reference.wav
+  ```
 
-That's it. On first use it's auto-transcribed with `faster-whisper` and the
-transcript cached to `prompt.txt` next to the audio, so there's no manual
-labeling step.
+Either way, that's it, no registration step. On first use it's
+auto-transcribed with `faster-whisper` and the transcript cached next to
+the audio (`my_voice.prompt.txt` for a loose file, `prompt.txt` inside the
+subfolder), so there's no manual labeling step. Restart the server (or
+just wait for the next request, voices are re-scanned each time) and it
+shows up in the voice list automatically.
 
 **The clip must be 3-10 seconds long**, GPT-SoVITS's own hard requirement.
 Anything outside that range is skipped at startup with a warning in the

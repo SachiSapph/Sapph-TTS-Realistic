@@ -16,11 +16,14 @@ TTS-Handler/GPT-SoVITS/
 # Voice reference audio: block by default (never upload someone's private
 # recording), except the copyright-free Kokoro-synthesized defaults this
 # repo actually ships. Keep the folder structure for any blocked voice (so
-# it's obvious where a voice goes), drop the audio itself.
+# it's obvious where a voice goes), drop the audio itself. Covers both the
+# subfolder form (voices/name/reference.wav) and loose files dropped
+# straight into voices/ (voices/name.wav), ** matches zero directories too.
 TTS-Handler/voices/**/*.wav
 TTS-Handler/voices/**/*.mp3
 TTS-Handler/voices/**/*.m4a
 TTS-Handler/voices/**/*.flac
+TTS-Handler/voices/**/*.ogg
 !TTS-Handler/voices/**/.gitkeep
 !TTS-Handler/voices/kokoro_female/reference.wav
 !TTS-Handler/voices/kokoro_male/reference.wav
@@ -28,8 +31,10 @@ TTS-Handler/voices/**/*.flac
 
 # Auto-transcribed transcripts (see voices.py) are private to whatever voice
 # they're next to, same rule as the audio: block by default, allow the
-# shipped defaults only.
+# shipped defaults only. prompt.txt is the subfolder form, *.prompt.txt is
+# the loose-file form's sibling transcript (e.g. name.mp3 -> name.prompt.txt).
 TTS-Handler/voices/**/prompt.txt
+TTS-Handler/voices/*.prompt.txt
 !TTS-Handler/voices/kokoro_female/prompt.txt
 !TTS-Handler/voices/kokoro_male/prompt.txt
 !TTS-Handler/voices/kokoro_alt/prompt.txt

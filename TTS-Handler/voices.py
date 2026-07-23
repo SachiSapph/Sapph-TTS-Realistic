@@ -1,12 +1,14 @@
 """
-Voice registry: auto-discovers voices from the voices/ folder. Each voice is
-a subfolder with one reference audio file (wav/mp3/m4a/flac/ogg) and,
-optionally, a prompt.txt with its exact transcript. Adding a voice really is
-just adding an audio file to a new subfolder here: if prompt.txt is missing,
-it's auto-transcribed once with faster-whisper (already a GPT-SoVITS
-dependency) and cached to prompt.txt next to the audio, no manual
-transcription step. To skip auto-transcription (e.g. you already know the
-exact wording), just write that prompt.txt file yourself before first use.
+Voice registry: auto-discovers voices from the voices/ folder, two ways:
+
+  voices/my_voice.mp3           <- loose file dropped straight in, named "my_voice"
+  voices/my_voice/reference.mp3 <- or its own subfolder, named after the folder
+
+Either way, a matching prompt.txt (subfolder form) or my_voice.prompt.txt
+(loose-file form, sitting next to the audio) supplies the exact transcript
+if you already know it. If it's missing, it's auto-transcribed once with
+faster-whisper (already a GPT-SoVITS dependency) and cached there, no
+manual transcription step either way.
 
 GPT-SoVITS requires the reference clip to be 3-10 seconds long, and raises
 an opaque OSError deep inside generation if it isn't, only when that voice
@@ -57,32 +59,38 @@ def _transcribe(audio_path: Path) -> str:
     return text
 
 
+def _discover_candidates() -> list[tuple[str, Path, Path]]:
+    """Returns (name, audio_path, transcript_path) for every voice found,
+    subfolders and loose top-level files alike."""
+    candidates = []
+    for entry in sorted(VOICES_DIR.iterdir()):
+        if entry.is_dir():
+            audio_files = [f for f in entry.iterdir() if f.suffix.lower() in AUDIO_EXTENSIONS]
+            if not audio_files:
+                continue
+            candidates.append((entry.name, audio_files[0], entry / "prompt.txt"))
+        elif entry.suffix.lower() in AUDIO_EXTENSIONS:
+            candidates.append((entry.stem, entry, entry.with_suffix(".prompt.txt")))
+    return candidates
+
+
 def list_voices() -> dict[str, Voice]:
     voices: dict[str, Voice] = {}
     if not VOICES_DIR.exists():
         return voices
 
-    for folder in sorted(VOICES_DIR.iterdir()):
-        if not folder.is_dir():
-            continue
-        audio_files = [f for f in folder.iterdir() if f.suffix.lower() in AUDIO_EXTENSIONS]
-        if not audio_files:
-            continue
-
-        audio_path = audio_files[0]
-
+    for name, audio_path, transcript_path in _discover_candidates():
         duration = sf.info(str(audio_path)).duration
         if not (MIN_REF_AUDIO_SECONDS <= duration <= MAX_REF_AUDIO_SECONDS):
             logger.warning(
                 "Skipping voice '%s': %s is %.1fs long, GPT-SoVITS requires "
                 "%.0f-%.0f seconds. Trim it (or pad short clips with "
                 "trailing silence) and it will show up automatically.",
-                folder.name, audio_path.name, duration,
+                name, audio_path.name, duration,
                 MIN_REF_AUDIO_SECONDS, MAX_REF_AUDIO_SECONDS,
             )
             continue
 
-        transcript_path = folder / "prompt.txt"
         if transcript_path.exists():
             # utf-8-sig strips a leading BOM if present (e.g. from Notepad or
             # PowerShell's Set-Content -Encoding utf8) while still reading
@@ -92,8 +100,8 @@ def list_voices() -> dict[str, Voice]:
             prompt_text = _transcribe(audio_path)
             transcript_path.write_text(prompt_text, encoding="utf-8")
 
-        voices[folder.name] = Voice(
-            name=folder.name,
+        voices[name] = Voice(
+            name=name,
             ref_audio_path=str(audio_path.relative_to(PROJECT_ROOT)),
             prompt_text=prompt_text,
         )
