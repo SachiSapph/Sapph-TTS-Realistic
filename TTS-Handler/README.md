@@ -173,10 +173,22 @@ genuinely shifts tone, not as a routine gimmick.
 
 ## Notes on pronunciation
 
-GPT-SoVITS's English frontend spells out unknown words 3 letters or shorter
-one letter at a time, and falls back to a neural guess for longer unknown
-words, both can mangle onomatopoeia ("eek", "hmph", "pfft"). Fix pronunciation
-for specific words by adding a line to
-`GPT-SoVITS/GPT_SoVITS/text/engdict-hot.rep` (format: `WORD PH1 PH2 ...`,
-space-separated ARPAbet phones), it's read fresh on every load and overrides
-both the dictionary and the guesser.
+GPT-SoVITS's English frontend mangles unusual words in two ways: it spells
+out unknown words 3 letters or shorter one letter at a time (so "eww" came
+out as "E, double-u, double-u"), and for longer unknown words its
+statistical word-segmenter sometimes splits them into fragments that get
+pronounced separately (so "haaah" was coming out with the leading H
+spoken as the letter name "aitch", not the consonant sound). Both are
+fixable with a pronunciation override.
+
+`pronunciations.rep` at this project's root (tracked in git) holds this
+project's own fixes, one line per word: `WORD PH1 PH2 ...`, space-separated
+ARPAbet phones. `TTSEngine.load()` merges any entries from it that aren't
+already present into GPT-SoVITS's own `engdict-hot.rep` (inside the
+gitignored vendor clone, read fresh on every load, overrides both its
+dictionary and its guesser) every time the engine starts, so a fresh clone
+of GPT-SoVITS always gets these fixes automatically, they don't silently
+disappear because the file they'd otherwise only live in isn't tracked.
+Add a new word by adding a line to `pronunciations.rep`, not by editing
+`engdict-hot.rep` directly, an edit there alone wouldn't survive a fresh
+GPT-SoVITS clone.

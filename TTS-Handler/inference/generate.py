@@ -23,6 +23,41 @@ from voices import get_voice
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 GPT_SOVITS_ROOT = PROJECT_ROOT / "GPT-SoVITS"
 
+# This project's own pronunciation fixes for words GPT-SoVITS's text
+# frontend mangles (onomatopoeia especially), tracked here since
+# GPT-SoVITS/ itself is a gitignored vendor clone: a fresh clone of it
+# wouldn't have these, and editing that file directly wouldn't survive a
+# fresh clone either. Synced into the real hot-dict file on every load().
+PRONUNCIATIONS_PATH = PROJECT_ROOT / "pronunciations.rep"
+
+
+def _sync_pronunciations():
+    """Merges this project's own pronunciation fixes into GPT-SoVITS's own
+    engdict-hot.rep (read fresh on every load, overrides both its
+    dictionary and its neural guesser), adding only entries not already
+    present so this is safe to call on every startup."""
+    if not PRONUNCIATIONS_PATH.exists():
+        return
+
+    hot_dict_path = GPT_SOVITS_ROOT / "GPT_SoVITS" / "text" / "engdict-hot.rep"
+    existing_words = set()
+    if hot_dict_path.exists():
+        for line in hot_dict_path.read_text(encoding="utf-8").splitlines():
+            if line.strip():
+                existing_words.add(line.split(" ", 1)[0])
+
+    missing_lines = [
+        line for line in PRONUNCIATIONS_PATH.read_text(encoding="utf-8").splitlines()
+        if line.strip() and line.split(" ", 1)[0] not in existing_words
+    ]
+    if not missing_lines:
+        return
+
+    with hot_dict_path.open("a", encoding="utf-8") as f:
+        if hot_dict_path.exists() and hot_dict_path.stat().st_size > 0:
+            f.write("\n")
+        f.write("\n".join(missing_lines) + "\n")
+
 
 class TTSEngine:
     def __init__(
@@ -57,6 +92,8 @@ class TTSEngine:
         doesn't leave that app's own relative-path file access broken for
         the rest of the process's life.
         """
+        _sync_pronunciations()
+
         original_cwd = os.getcwd()
         os.chdir(GPT_SOVITS_ROOT)
         sys.path.append(str(GPT_SOVITS_ROOT))
