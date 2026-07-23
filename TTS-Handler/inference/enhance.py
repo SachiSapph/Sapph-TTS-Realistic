@@ -14,22 +14,27 @@ helps, re-measure for your own source before enabling it.
 VoiceFixer's own `restore()` only takes file paths; `restore_inmem()` is the
 lower-level array-in/array-out call it's built on (confirmed by reading its
 source directly), used here to avoid needing temp files.
+
+`voicefixer` is imported lazily inside load(), not at module level — this
+module is imported by chat_demo.py on every startup regardless of whether
+enhancement is ever actually enabled (it isn't, by default, per the caller's
+own comment), and `import voicefixer` alone measured 2.7s, pure dead weight
+on every cold start for a feature nothing currently calls.
 """
 
 from io import BytesIO
 
-import librosa
 import soundfile as sf
-from voicefixer import VoiceFixer
 
 _SAMPLE_RATE = 44100
 
-_voicefixer: VoiceFixer | None = None
+_voicefixer = None
 
 
 def load():
     """Load the enhancement model. Call once at startup, not per-request."""
     global _voicefixer
+    from voicefixer import VoiceFixer
     _voicefixer = VoiceFixer()
 
 
@@ -38,6 +43,7 @@ def enhance(audio_bytes: bytes) -> bytes:
     if _voicefixer is None:
         raise RuntimeError("Call load() before enhance().")
 
+    import librosa
     wav, _ = librosa.load(BytesIO(audio_bytes), sr=_SAMPLE_RATE)
     restored = _voicefixer.restore_inmem(wav, cuda=True, mode=0)
 

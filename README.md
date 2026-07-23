@@ -179,6 +179,47 @@ project. Check for them now rather than debugging a mystery crash later:
   ```
   (PowerShell: `$env:PYTHONUTF8=1; $env:PYTHONIOENCODING="utf-8"`.)
   `run.bat` (see below) already sets these for you.
+- **A non-English voice's first use 500s with `TTS generation failed:
+  No module named 'opencc'`**: GPT-SoVITS's Chinese text frontend needs
+  `opencc`, listed in its own `requirements.txt` but built from source
+  there (`--no-binary=opencc`), which silently fails without a C/C++
+  compiler — the same category of problem as `jieba_fast` above. Fix,
+  install the pure-Python reimplementation instead (same import name,
+  no compiler needed):
+  ```bash
+  pip install opencc-python-reimplemented
+  ```
+- **Then it 500s again with `[Errno 2] No such file or directory:
+  'GPT_SoVITS/text\\G2PWModel_1.1.zip'`**: a required Chinese
+  pinyin-disambiguation model GPT-SoVITS expects at
+  `GPT-SoVITS/GPT_SoVITS/text/G2PWModel/`, not included in the pretrained
+  weights download above. Fetch and place it manually:
+  ```bash
+  cd GPT-SoVITS/GPT_SoVITS/text
+  curl -L -o G2PWModel_1.1.zip https://www.modelscope.cn/models/kamiorinn/g2pw/resolve/master/G2PWModel_1.1.zip
+  unzip G2PWModel_1.1.zip
+  mv G2PWModel_1.1 G2PWModel
+  rm G2PWModel_1.1.zip
+  cd ../../../..
+  ```
+  (This is ~560MB — GPT-SoVITS's own code would normally download this
+  itself on first use, but only works if the process's current directory
+  still happens to be GPT-SoVITS's own repo root at that exact moment,
+  which isn't true here — see the next point.)
+- Both snags above only actually break the *first* time a given language
+  is used, not at startup: GPT-SoVITS lazily imports each language's own
+  text-processing module (`GPT_SoVITS/text/chinese2.py` for Chinese) only
+  when a request for that language actually arrives, well after
+  `TTSEngine.load()` has already run and returned. `load()` used to
+  restore the original working directory afterward (a defensive courtesy
+  for apps embedding this engine); that meant any of GPT-SoVITS's own
+  bare-relative-path asset lookups (like the G2PWModel path above) broke
+  the moment a non-English request came in from a fresh server, since cwd
+  was no longer pointed at GPT-SoVITS's own repo root by then. Fixed by
+  leaving cwd there permanently instead of reverting it — verified safe
+  for this project specifically, since neither `TTS-Handler/` nor
+  `TTS-Tester/` resolve any of their own files relative to cwd (both only
+  ever use `Path(__file__)`-anchored absolute paths).
 
 ### 8. Two config tweaks worth making
 

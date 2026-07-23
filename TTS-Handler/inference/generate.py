@@ -85,30 +85,37 @@ class TTSEngine:
     def load(self):
         """Load the model onto GPU. Call once at server startup, not per-request.
 
-        GPT-SoVITS's own config resolves several of its asset paths as bare
-        relative strings against the process cwd, so cwd is temporarily
-        pointed at GPT-SoVITS's own repo root for the duration of this call
-        only, then restored, so embedding this engine inside a larger app
-        doesn't leave that app's own relative-path file access broken for
-        the rest of the process's life.
+        GPT-SoVITS's own code resolves several of its asset paths as bare
+        relative strings against the process cwd — not just at config-load
+        time here, but also lazily, later, the first time a given text
+        language is actually used (confirmed directly: GPT_SoVITS/text/
+        chinese2.py imports text/g2pw's model at module level, which only
+        happens on the first real Chinese-language request, well after this
+        method has already returned; its model_dir="GPT_SoVITS/text/
+        G2PWModel" is a bare relative string, unlike the correctly
+        __file__-anchored opencpop-strict.txt load two lines above it in
+        the same file — unless cwd is STILL pointed at GPT-SoVITS's own
+        repo root at that later point, it raises FileNotFoundError instead
+        of finding the already-downloaded model). So cwd is pointed at
+        GPT-SoVITS's own repo root here and deliberately left there for the
+        rest of the process's life, not reverted afterward — safe in this
+        project specifically, since nothing else in TTS-Handler or
+        TTS-Tester resolves its own paths relative to cwd (verified: both
+        only ever use Path(__file__)-anchored absolute paths).
         """
         _sync_pronunciations()
 
-        original_cwd = os.getcwd()
         os.chdir(GPT_SOVITS_ROOT)
         sys.path.append(str(GPT_SOVITS_ROOT))
         sys.path.append(str(GPT_SOVITS_ROOT / "GPT_SoVITS"))
-        try:
-            from GPT_SoVITS.TTS_infer_pack.TTS import TTS, TTS_Config
+        from GPT_SoVITS.TTS_infer_pack.TTS import TTS, TTS_Config
 
-            config = TTS_Config(self.config_path)
-            if self.gpt_weights_path:
-                config.t2s_weights_path = self.gpt_weights_path
-            if self.sovits_weights_path:
-                config.vits_weights_path = self.sovits_weights_path
-            self._pipeline = TTS(config)
-        finally:
-            os.chdir(original_cwd)
+        config = TTS_Config(self.config_path)
+        if self.gpt_weights_path:
+            config.t2s_weights_path = self.gpt_weights_path
+        if self.sovits_weights_path:
+            config.vits_weights_path = self.sovits_weights_path
+        self._pipeline = TTS(config)
 
     def generate(
         self,
