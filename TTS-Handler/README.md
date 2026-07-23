@@ -70,7 +70,9 @@ engine.generate("Hello there!", emotion="happy", voice="kokoro_male")
 Two ways, pick whichever's more convenient:
 
 - **Drag an audio file straight into `voices/`**, named however you want the
-  voice to show up: `voices/my_voice.wav` (wav/mp3/m4a/flac/ogg all work).
+  voice to show up: `voices/my_voice.wav` (wav/mp3/m4a/flac/ogg all work,
+  m4a and anything else not natively readable is transcoded to a cached
+  WAV automatically, e.g. a voice memo straight off a phone just works).
 - **Or give it its own subfolder**, useful if you want to keep a
   hand-written transcript alongside it:
   ```
@@ -101,9 +103,12 @@ If nothing works, e.g. the whole clip is one uninterrupted sentence
 longer than 10 seconds with no pause anywhere, or it's over a minute
 long, it's skipped at startup with a warning in the console explaining
 why, rather than failing later when you try to use it, check there if a
-voice you added seems to be missing. Only add a voice you actually have
-the rights to use: your own voice, a permissively-licensed source, or someone else's with their
-explicit consent.
+voice you added seems to be missing. One broken voice (unreadable file,
+anything unexpected) is always just skipped with a warning, it can't take
+down every other voice, `GET /voices` returns the rest either way. Only
+add a voice you actually have the rights to use: your own voice, a
+permissively-licensed source, or someone else's with their explicit
+consent.
 
 If auto-transcription gets something wrong, just edit the generated
 `prompt.txt` by hand, it's read from disk, not regenerated once it exists.

@@ -21,6 +21,17 @@ is extracted to a cached file, so dropping in an ordinary voice memo or
 recording just works without manually editing it first. Only a clip with
 no such pause (or over a minute, or under 3 seconds even after) is skipped
 with a clear reason.
+
+soundfile/libsndfile (used for every duration check and for GPT-SoVITS's
+own torchaudio-based loader on this project's pinned legacy backend) can't
+actually open every format its name suggests it might: notably m4a/AAC.
+Anything outside NATIVE_SOUNDFILE_EXTENSIONS is transcoded to a cached WAV
+via ffmpeg (pydub, already a dependency) before anything else touches it.
+
+One bad voice (unreadable file, corrupt audio, anything unexpected) must
+never take down every OTHER voice, list_voices() is called on every page
+load, so a single crash here would empty the entire voice list. Every
+per-voice step is wrapped accordingly.
 """
 
 import logging
@@ -36,6 +47,11 @@ VOICES_DIR = PROJECT_ROOT / "voices"
 
 AUDIO_EXTENSIONS = (".wav", ".mp3", ".m4a", ".flac", ".ogg")
 
+# The subset soundfile/libsndfile can actually open directly (verified via
+# soundfile.available_formats()). Anything else in AUDIO_EXTENSIONS above
+# gets transcoded to WAV first, see _ensure_readable().
+NATIVE_SOUNDFILE_EXTENSIONS = (".wav", ".mp3", ".flac", ".ogg")
+
 # GPT-SoVITS's own hard requirement (TTS_infer_pack/TTS.py), not a value we chose.
 MIN_REF_AUDIO_SECONDS = 3.0
 MAX_REF_AUDIO_SECONDS = 10.0
@@ -45,6 +61,10 @@ MAX_REF_AUDIO_SECONDS = 10.0
 MAX_RAW_CLIP_SECONDS = 60.0
 
 AUTOTRIM_SUFFIX = ".autotrim.wav"
+CONVERTED_SUFFIX = ".converted.wav"
+# Files this module generates itself, never treated as their own separate
+# loose-file voice, only ever as a candidate for the original they came from.
+GENERATED_SUFFIXES = (AUTOTRIM_SUFFIX, CONVERTED_SUFFIX)
 
 _whisper_model = None  # lazy-loaded, only needed the first time transcription/trimming is needed
 
@@ -63,6 +83,21 @@ def _get_whisper_model():
 
         _whisper_model = WhisperModel("base.en", compute_type="int8")
     return _whisper_model
+
+
+def _ensure_readable(audio_path: Path) -> Path:
+    """Transcodes to a cached WAV if this format isn't one soundfile can
+    open directly. A no-op (returns the same path) otherwise."""
+    if audio_path.suffix.lower() in NATIVE_SOUNDFILE_EXTENSIONS:
+        return audio_path
+
+    converted_path = audio_path.with_name(f"{audio_path.stem}{CONVERTED_SUFFIX}")
+    if not converted_path.exists():
+        from pydub import AudioSegment
+
+        logger.info("Transcoding %s to WAV (soundfile can't read this format directly) ...", audio_path.name)
+        AudioSegment.from_file(str(audio_path)).export(str(converted_path), format="wav")
+    return converted_path
 
 
 def _transcribe(audio_path: Path) -> str:
@@ -108,8 +143,9 @@ def _discover_candidates() -> list[tuple[str, list[Path], Path]]:
     (or a loose file with a previously cached auto-trim) can have more than
     one, and list_voices() below tries each in order rather than assuming
     the first one found is the usable one. Files this module generated
-    itself (*.autotrim.wav) never show up as their own separate loose-file
-    voice, only as a candidate for the original they were trimmed from."""
+    itself (*.autotrim.wav, *.converted.wav) never show up as their own
+    separate loose-file voice, only as a candidate for the original they
+    came from."""
     candidates = []
     for entry in sorted(VOICES_DIR.iterdir()):
         if entry.is_dir():
@@ -117,7 +153,7 @@ def _discover_candidates() -> list[tuple[str, list[Path], Path]]:
             if not audio_files:
                 continue
             candidates.append((entry.name, audio_files, entry / "prompt.txt"))
-        elif entry.name.endswith(AUTOTRIM_SUFFIX):
+        elif entry.name.endswith(GENERATED_SUFFIXES):
             continue
         elif entry.suffix.lower() in AUDIO_EXTENSIONS:
             audio_candidates = [entry]
@@ -134,38 +170,64 @@ def list_voices() -> dict[str, Voice]:
         return voices
 
     for name, audio_candidates, transcript_path in _discover_candidates():
-        audio_path = None
-        prompt_text = None
-        rejected = []
+        try:
+            voice = _resolve_voice(name, audio_candidates, transcript_path)
+        except Exception as e:
+            # A single broken voice (unreadable file, transcription
+            # failure, anything unexpected) must never take down every
+            # OTHER voice, list_voices() runs on essentially every request.
+            logger.warning("Skipping voice '%s': %s", name, e)
+            continue
+        if voice is not None:
+            voices[name] = voice
 
-        for candidate in audio_candidates:
+    return voices
+
+
+def _resolve_voice(name: str, audio_candidates: list[Path], transcript_path: Path) -> Voice | None:
+    """Picks the first candidate already in range, or the first one that
+    can be auto-trimmed into range, for one voice. Returns None (already
+    logged) if nothing usable was found; raises if something unexpected
+    went wrong, list_voices() above turns that into a skip too, just with
+    the real exception in the log instead of a generic reason."""
+    audio_path = None
+    prompt_text = None
+    rejected = []  # (raw_candidate, readable_candidate, duration)
+
+    for raw_candidate in audio_candidates:
+        try:
+            candidate = _ensure_readable(raw_candidate)
             duration = sf.info(str(candidate)).duration
-            if MIN_REF_AUDIO_SECONDS <= duration <= MAX_REF_AUDIO_SECONDS:
-                audio_path = candidate
-                break
-            rejected.append((candidate, duration))
+        except Exception as e:
+            logger.warning("Voice '%s': couldn't read %s (%s), trying any other candidate.", name, raw_candidate.name, e)
+            continue
+        if MIN_REF_AUDIO_SECONDS <= duration <= MAX_REF_AUDIO_SECONDS:
+            audio_path = candidate
+            break
+        rejected.append((raw_candidate, candidate, duration))
 
-        if audio_path is None:
-            for candidate, duration in rejected:
-                if not (MAX_REF_AUDIO_SECONDS < duration <= MAX_RAW_CLIP_SECONDS):
-                    continue
-                segment = _find_natural_segment(candidate)
-                if segment is None:
-                    continue
-                start, end, segment_text = segment
-                autotrim_path = candidate.with_name(f"{candidate.stem}{AUTOTRIM_SUFFIX}")
-                _extract_segment(candidate, start, end, autotrim_path)
-                logger.info(
-                    "Auto-trimmed voice '%s': extracted %.1fs-%.1fs from %s",
-                    name, start, end, candidate.name,
-                )
-                audio_path = autotrim_path
-                prompt_text = segment_text
-                transcript_path.write_text(prompt_text, encoding="utf-8")
-                break
+    if audio_path is None:
+        for raw_candidate, candidate, duration in rejected:
+            if not (MAX_REF_AUDIO_SECONDS < duration <= MAX_RAW_CLIP_SECONDS):
+                continue
+            segment = _find_natural_segment(candidate)
+            if segment is None:
+                continue
+            start, end, segment_text = segment
+            # Cache path keyed on the ORIGINAL file's name, not the
+            # (possibly transcoded) readable candidate's, so a later scan's
+            # cache lookup in _discover_candidates still finds it.
+            autotrim_path = raw_candidate.with_name(f"{raw_candidate.stem}{AUTOTRIM_SUFFIX}")
+            _extract_segment(candidate, start, end, autotrim_path)
+            logger.info("Auto-trimmed voice '%s': extracted %.1fs-%.1fs from %s", name, start, end, raw_candidate.name)
+            audio_path = autotrim_path
+            prompt_text = segment_text
+            transcript_path.write_text(prompt_text, encoding="utf-8")
+            break
 
-        if audio_path is None:
-            reasons = ", ".join(f"{c.name} ({d:.1f}s)" for c, d in rejected)
+    if audio_path is None:
+        if rejected:
+            reasons = ", ".join(f"{r.name} ({d:.1f}s)" for r, _, d in rejected)
             logger.warning(
                 "Skipping voice '%s': no audio file is in, or could be "
                 "auto-trimmed into, GPT-SoVITS's required %.0f-%.0f second "
@@ -173,25 +235,25 @@ def list_voices() -> dict[str, Voice]:
                 "inside that window and it will show up automatically.",
                 name, MIN_REF_AUDIO_SECONDS, MAX_REF_AUDIO_SECONDS, reasons,
             )
-            continue
+        else:
+            logger.warning("Skipping voice '%s': no audio file could be read.", name)
+        return None
 
-        if prompt_text is None:
-            if transcript_path.exists():
-                # utf-8-sig strips a leading BOM if present (e.g. from
-                # Notepad or PowerShell's Set-Content -Encoding utf8) while
-                # still reading plain UTF-8 files with no BOM correctly.
-                prompt_text = transcript_path.read_text(encoding="utf-8-sig").strip()
-            else:
-                prompt_text = _transcribe(audio_path)
-                transcript_path.write_text(prompt_text, encoding="utf-8")
+    if prompt_text is None:
+        if transcript_path.exists():
+            # utf-8-sig strips a leading BOM if present (e.g. from Notepad
+            # or PowerShell's Set-Content -Encoding utf8) while still
+            # reading plain UTF-8 files with no BOM correctly.
+            prompt_text = transcript_path.read_text(encoding="utf-8-sig").strip()
+        else:
+            prompt_text = _transcribe(audio_path)
+            transcript_path.write_text(prompt_text, encoding="utf-8")
 
-        voices[name] = Voice(
-            name=name,
-            ref_audio_path=str(audio_path.relative_to(PROJECT_ROOT)),
-            prompt_text=prompt_text,
-        )
-
-    return voices
+    return Voice(
+        name=name,
+        ref_audio_path=str(audio_path.relative_to(PROJECT_ROOT)),
+        prompt_text=prompt_text,
+    )
 
 
 def get_voice(name: str) -> Voice:
