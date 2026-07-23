@@ -81,6 +81,10 @@ app = FastAPI(title="Sapph-TTS Chat Demo")
 
 gemini_client: genai.Client | None = None
 engine = TTSEngine(config_path="GPT-SoVITS/GPT_SoVITS/configs/tts_infer.yaml")
+# Deliberately in-memory only, never written to disk: this is a test
+# harness, not a product with a real privacy policy, so nothing about a
+# chat session should outlive the server process. Restarting the server
+# (or /clear) is the only way to reset it.
 conversation_history: list[dict] = []
 _last_audio: bytes = b""
 

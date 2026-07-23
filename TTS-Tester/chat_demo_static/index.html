@@ -2,210 +2,386 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Sapph-TTS Chat Demo</title>
 <style>
   :root {
     color-scheme: dark;
+
+    /* Colors */
+    --color-bg: #16161d;
+    --color-surface: #1c1c25;
+    --color-surface-raised: #232330;
+    --color-surface-hover: #2c2c3a;
+    --color-border: #2a2a35;
+    --color-border-strong: #3a3a48;
+    --color-text: #e8e8ef;
+    --color-text-dim: #a8a8b8;
+    --color-text-faint: #6f6f80;
+    --color-accent: #c9a6ff;
+    --color-accent-strong: #7c5cbf;
+    --color-accent-strong-hover: #8f6dd6;
+    --color-user-bubble: #4a3b6b;
+    --color-success: #7fd894;
+    --color-error: #ff8a8a;
+
+    /* Spacing scale */
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 20px;
+    --space-6: 24px;
+
+    /* Radius */
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 14px;
+
+    /* Elevation */
+    --shadow-modal: 0 20px 60px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.3);
+    --shadow-header: 0 1px 0 rgba(0, 0, 0, 0.2);
+
+    /* Motion */
+    --transition-fast: 120ms ease;
+    --transition-medium: 200ms ease;
   }
+
+  * {
+    box-sizing: border-box;
+  }
+
   body {
     margin: 0;
-    font-family: -apple-system, "Segoe UI", sans-serif;
-    background: #16161d;
-    color: #e8e8ef;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    background: var(--color-bg);
+    color: var(--color-text);
     display: flex;
     flex-direction: column;
     height: 100vh;
   }
+
   header {
-    padding: 14px 20px;
-    border-bottom: 1px solid #2a2a35;
+    padding: var(--space-4) var(--space-5);
+    border-bottom: 1px solid var(--color-border);
+    box-shadow: var(--shadow-header);
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: var(--space-4);
+    flex-wrap: wrap;
+    z-index: 1;
   }
   header h1 {
     font-size: 16px;
     margin: 0;
     font-weight: 600;
-    color: #c9a6ff;
+    color: var(--color-accent);
+    white-space: nowrap;
   }
   header .controls {
     display: flex;
-    gap: 10px;
+    flex-wrap: wrap;
+    gap: var(--space-3);
     align-items: center;
   }
+  .control-group {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+  .control-group label {
+    font-size: 12px;
+    color: var(--color-text-dim);
+    white-space: nowrap;
+  }
+
+  select, button, input {
+    font-family: inherit;
+  }
   select, button {
-    background: #232330;
-    color: #e8e8ef;
-    border: 1px solid #3a3a48;
-    border-radius: 6px;
-    padding: 6px 10px;
+    background: var(--color-surface-raised);
+    color: var(--color-text);
+    border: 1px solid var(--color-border-strong);
+    border-radius: var(--radius-sm);
+    padding: 7px 11px;
     font-size: 13px;
+    transition: background var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast);
+  }
+  select:hover, button:not(:disabled):hover {
+    background: var(--color-surface-hover);
+    border-color: #48485a;
+  }
+  select:focus-visible, button:focus-visible, input:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 1px;
   }
   button {
     cursor: pointer;
   }
-  button:hover {
-    background: #2c2c3a;
+  button:active:not(:disabled) {
+    transform: scale(0.97);
   }
-  #messages {
-    flex: 1;
-    overflow-y: auto;
-    padding: 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-  }
-  .msg {
-    max-width: 70%;
-    padding: 10px 14px;
-    border-radius: 14px;
-    line-height: 1.4;
-    font-size: 14px;
-  }
-  .msg.user {
-    align-self: flex-end;
-    background: #4a3b6b;
-    border-bottom-right-radius: 3px;
-  }
-  .msg.assistant {
-    align-self: flex-start;
-    background: #232330;
-    border-bottom-left-radius: 3px;
-  }
-  .msg .meta {
-    font-size: 11px;
-    opacity: 0.55;
-    margin-top: 4px;
-  }
-  .msg.pending {
-    opacity: 0.5;
-    font-style: italic;
-  }
-  footer {
-    border-top: 1px solid #2a2a35;
-    padding: 14px 20px;
-    display: flex;
-    gap: 10px;
-  }
-  #input {
-    flex: 1;
-    background: #232330;
-    color: #e8e8ef;
-    border: 1px solid #3a3a48;
-    border-radius: 8px;
-    padding: 10px 14px;
-    font-size: 14px;
-  }
-  #input:focus {
-    outline: 2px solid #c9a6ff;
-  }
-  #send {
-    background: #7c5cbf;
-    border: none;
-    font-weight: 600;
-  }
-  #send:hover {
-    background: #8f6dd6;
-  }
-  #send:disabled {
+  button:disabled {
     opacity: 0.5;
     cursor: default;
+    transform: none;
   }
+
   #gear {
     font-size: 16px;
     line-height: 1;
-    padding: 6px 9px;
+    padding: 7px 10px;
   }
+
+  #messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--space-5);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border-strong) transparent;
+  }
+  #messages::-webkit-scrollbar {
+    width: 8px;
+  }
+  #messages::-webkit-scrollbar-thumb {
+    background: var(--color-border-strong);
+    border-radius: 8px;
+  }
+  #messages::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .empty-state {
+    margin: auto;
+    text-align: center;
+    color: var(--color-text-faint);
+    font-size: 13px;
+    max-width: 320px;
+    line-height: 1.6;
+  }
+
+  .msg {
+    max-width: 70%;
+    padding: var(--space-2) var(--space-4) var(--space-3);
+    border-radius: var(--radius-lg);
+    line-height: 1.45;
+    font-size: 14px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    animation: msg-in var(--transition-medium);
+  }
+  @keyframes msg-in {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .msg.user {
+    align-self: flex-end;
+    background: var(--color-user-bubble);
+    border-bottom-right-radius: var(--radius-sm);
+  }
+  .msg.assistant {
+    align-self: flex-start;
+    background: var(--color-surface-raised);
+    border-bottom-left-radius: var(--radius-sm);
+  }
+  .msg .meta {
+    font-size: 11px;
+    color: var(--color-text-faint);
+    margin-top: var(--space-1);
+  }
+  .msg.pending {
+    opacity: 0.6;
+    font-style: italic;
+  }
+  .msg.error {
+    background: rgba(255, 138, 138, 0.12);
+    border: 1px solid rgba(255, 138, 138, 0.35);
+    color: var(--color-error);
+  }
+
+  footer {
+    border-top: 1px solid var(--color-border);
+    padding: var(--space-4) var(--space-5);
+    display: flex;
+    gap: var(--space-3);
+  }
+  #input {
+    flex: 1;
+    background: var(--color-surface-raised);
+    color: var(--color-text);
+    border: 1px solid var(--color-border-strong);
+    border-radius: var(--radius-md);
+    padding: var(--space-3) var(--space-4);
+    font-size: 14px;
+    transition: border-color var(--transition-fast);
+  }
+  #input:focus-visible {
+    outline: none;
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 3px rgba(201, 166, 255, 0.2);
+  }
+  #send {
+    background: var(--color-accent-strong);
+    border: none;
+    font-weight: 600;
+    padding: var(--space-3) var(--space-5);
+  }
+  #send:not(:disabled):hover {
+    background: var(--color-accent-strong-hover);
+  }
+
   .modal-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.55);
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(2px);
     display: none;
     align-items: center;
     justify-content: center;
     z-index: 10;
+    padding: var(--space-4);
   }
   .modal-backdrop.open {
     display: flex;
+    animation: backdrop-in var(--transition-medium);
+  }
+  @keyframes backdrop-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
   }
   .modal {
-    background: #1e1e28;
-    border: 1px solid #3a3a48;
-    border-radius: 12px;
-    padding: 22px;
-    width: 360px;
-    max-width: calc(100vw - 40px);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border-strong);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-modal);
+    padding: var(--space-6);
+    width: 380px;
+    max-width: 100%;
+    max-height: calc(100vh - 2 * var(--space-4));
+    overflow-y: auto;
+    animation: modal-in var(--transition-medium);
   }
-  .modal h2 {
-    margin: 0 0 16px;
-    font-size: 15px;
-    color: #c9a6ff;
+  @keyframes modal-in {
+    from { opacity: 0; transform: translateY(8px) scale(0.98); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
   }
+  .modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--space-5);
+  }
+  .modal-header h2 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--color-accent);
+  }
+  #modal-close {
+    background: transparent;
+    border: none;
+    color: var(--color-text-dim);
+    font-size: 18px;
+    line-height: 1;
+    padding: var(--space-1) var(--space-2);
+  }
+  #modal-close:hover {
+    color: var(--color-text);
+    background: var(--color-surface-hover);
+  }
+
   .field {
-    margin-bottom: 14px;
+    margin-bottom: var(--space-5);
+  }
+  .field-section + .field-section {
+    margin-top: var(--space-6);
+    padding-top: var(--space-5);
+    border-top: 1px solid var(--color-border);
   }
   .field label {
     display: block;
     font-size: 12px;
-    opacity: 0.7;
-    margin-bottom: 6px;
+    font-weight: 600;
+    color: var(--color-text-dim);
+    margin-bottom: var(--space-2);
   }
   .field input, .field select {
     width: 100%;
-    box-sizing: border-box;
-    background: #232330;
-    color: #e8e8ef;
-    border: 1px solid #3a3a48;
-    border-radius: 6px;
-    padding: 8px 10px;
+    padding: var(--space-3);
     font-size: 13px;
   }
-  .field input:focus, .field select:focus {
-    outline: 2px solid #c9a6ff;
+  .field input:focus-visible, .field select:focus-visible {
+    outline: none;
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 3px rgba(201, 166, 255, 0.2);
   }
   .field .hint {
     font-size: 11px;
-    opacity: 0.5;
-    margin-top: 5px;
+    color: var(--color-text-faint);
+    margin-top: var(--space-2);
+    line-height: 1.5;
   }
   .field .hint a {
-    color: #c9a6ff;
-    opacity: 1;
+    color: var(--color-accent);
+  }
+  .field .hint a:hover {
+    text-decoration: none;
   }
   .test-voice-row {
     display: flex;
-    gap: 8px;
+    gap: var(--space-2);
   }
   .test-voice-row select {
     flex: 1;
   }
   .test-voice-row button {
     white-space: nowrap;
+    background: var(--color-accent-strong);
+    border-color: var(--color-accent-strong);
+    color: #fff;
+    font-weight: 600;
+  }
+  .test-voice-row button:not(:disabled):hover {
+    background: var(--color-accent-strong-hover);
+    border-color: var(--color-accent-strong-hover);
   }
   .modal-actions {
     display: flex;
     justify-content: flex-end;
-    gap: 8px;
-    margin-top: 18px;
+    gap: var(--space-2);
+    margin-top: var(--space-6);
   }
   #settings-status {
     font-size: 12px;
-    margin-top: 10px;
+    margin-top: var(--space-3);
     min-height: 16px;
   }
-  #settings-status.ok { color: #7fd894; }
-  #settings-status.err { color: #ff8a8a; }
+  #settings-status.ok { color: var(--color-success); }
+  #settings-status.err { color: var(--color-error); }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.001ms !important;
+      transition-duration: 0.001ms !important;
+    }
+  }
 </style>
 </head>
 <body>
   <header>
     <h1>Sapph-TTS Chat Demo</h1>
     <div class="controls">
-      <label for="voice" style="font-size: 12px; opacity: 0.7;">Voice</label>
-      <select id="voice"></select>
-      <label for="emotion" style="font-size: 12px; opacity: 0.7;">Voice tone</label>
-      <select id="emotion"></select>
+      <div class="control-group">
+        <label for="voice">Voice</label>
+        <select id="voice"></select>
+      </div>
+      <div class="control-group">
+        <label for="emotion">Tone</label>
+        <select id="emotion"></select>
+      </div>
       <button id="clear">Clear chat</button>
       <button id="gear" title="Settings" aria-label="Open settings">⚙</button>
     </div>
@@ -213,32 +389,45 @@
 
   <div class="modal-backdrop" id="modal-backdrop">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
-      <h2 id="modal-title">Settings</h2>
-      <div class="field">
-        <label for="api-key">Gemini API key</label>
-        <div class="hint">
-          <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Get a free Gemini API key</a>
+      <div class="modal-header">
+        <h2 id="modal-title">Settings</h2>
+        <button id="modal-close" type="button" aria-label="Close settings">&times;</button>
+      </div>
+
+      <div class="field-section">
+        <div class="field">
+          <label for="api-key">Gemini API key</label>
+          <input id="api-key" type="password" placeholder="Enter to update, leave blank to keep current" autocomplete="off">
+          <div class="hint">
+            <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Get a free Gemini API key &rarr;</a>
+          </div>
+          <div class="hint" id="api-key-hint">No key set yet.</div>
         </div>
-        <input id="api-key" type="password" placeholder="Enter to update, leave blank to keep current" autocomplete="off">
-        <div class="hint" id="api-key-hint">No key set yet.</div>
       </div>
-      <div class="field">
-        <label for="default-voice">Default voice</label>
-        <select id="default-voice"></select>
-      </div>
-      <div class="field">
-        <label for="default-emotion">Default voice tone</label>
-        <select id="default-emotion"></select>
-      </div>
-      <div class="field">
-        <label for="test-voice">Test a voice</label>
-        <div class="test-voice-row">
-          <select id="test-voice"></select>
-          <button id="test-voice-play" type="button">Play sample</button>
+
+      <div class="field-section">
+        <div class="field">
+          <label for="default-voice">Default voice</label>
+          <select id="default-voice"></select>
         </div>
-        <div class="hint" id="test-voice-hint">Plays a short sample line, no API key needed. Includes any voice you've added to TTS-Handler/voices/.</div>
+        <div class="field">
+          <label for="default-emotion">Default voice tone</label>
+          <select id="default-emotion"></select>
+        </div>
       </div>
-      <div id="settings-status"></div>
+
+      <div class="field-section">
+        <div class="field" style="margin-bottom: 0;">
+          <label for="test-voice">Test a voice</label>
+          <div class="test-voice-row">
+            <select id="test-voice"></select>
+            <button id="test-voice-play" type="button">Play sample</button>
+          </div>
+          <div class="hint" id="test-voice-hint">Plays a short sample line, no API key needed. Includes any voice you've added to TTS-Handler/voices/.</div>
+        </div>
+      </div>
+
+      <div id="settings-status" role="status"></div>
       <div class="modal-actions">
         <button id="settings-cancel">Cancel</button>
         <button id="settings-save">Save</button>
@@ -246,7 +435,7 @@
     </div>
   </div>
 
-  <div id="messages"></div>
+  <div id="messages" aria-live="polite"></div>
 
   <footer>
     <input id="input" type="text" placeholder="Type a message..." autocomplete="off">
@@ -262,6 +451,7 @@ const voiceEl = document.getElementById('voice');
 const clearEl = document.getElementById('clear');
 const gearEl = document.getElementById('gear');
 const modalBackdrop = document.getElementById('modal-backdrop');
+const modalCloseEl = document.getElementById('modal-close');
 const apiKeyEl = document.getElementById('api-key');
 const apiKeyHintEl = document.getElementById('api-key-hint');
 const defaultEmotionEl = document.getElementById('default-emotion');
@@ -273,8 +463,14 @@ const settingsStatusEl = document.getElementById('settings-status');
 const settingsCancelEl = document.getElementById('settings-cancel');
 const settingsSaveEl = document.getElementById('settings-save');
 
+const TEST_VOICE_DEFAULT_HINT = "Plays a short sample line, no API key needed. Includes any voice you've added to TTS-Handler/voices/.";
+
 let emotionNames = [];
 let voiceNames = [];
+
+function showEmptyState() {
+  messagesEl.innerHTML = '<div class="empty-state">Say something below to try the voice and tone you\'ve picked above. Nothing you type here is saved to disk.</div>';
+}
 
 async function loadEmotions() {
   const res = await fetch('/emotions');
@@ -332,7 +528,7 @@ async function openSettings() {
   defaultVoiceEl.value = data.default_voice;
   voiceEl.value = data.default_voice;
   testVoiceEl.value = data.default_voice;
-  testVoiceHintEl.textContent = "Plays a short sample line, no API key needed. Includes any voice you've added to TTS-Handler/voices/.";
+  testVoiceHintEl.textContent = TEST_VOICE_DEFAULT_HINT;
   settingsStatusEl.textContent = '';
   settingsStatusEl.className = '';
   modalBackdrop.classList.add('open');
@@ -370,6 +566,7 @@ async function saveSettings() {
 }
 
 gearEl.addEventListener('click', openSettings);
+modalCloseEl.addEventListener('click', closeSettings);
 settingsCancelEl.addEventListener('click', closeSettings);
 settingsSaveEl.addEventListener('click', saveSettings);
 testVoicePlayEl.addEventListener('click', playTestVoice);
@@ -381,6 +578,8 @@ document.addEventListener('keydown', (e) => {
 });
 
 function addMessage(role, text, pending = false) {
+  const emptyState = messagesEl.querySelector('.empty-state');
+  if (emptyState) emptyState.remove();
   const div = document.createElement('div');
   div.className = `msg ${role}` + (pending ? ' pending' : '');
   div.textContent = text;
@@ -422,7 +621,8 @@ async function sendMessage() {
     const audio = new Audio(data.audio_url + '?t=' + Date.now());
     audio.play().catch(() => {});
   } catch (e) {
-    pendingDiv.classList.remove('pending');
+    pendingDiv.classList.remove('pending', 'assistant');
+    pendingDiv.classList.add('error');
     pendingDiv.textContent = `Error: ${e.message}`;
   } finally {
     sendEl.disabled = false;
@@ -436,9 +636,10 @@ inputEl.addEventListener('keydown', (e) => {
 });
 clearEl.addEventListener('click', async () => {
   await fetch('/clear', { method: 'POST' });
-  messagesEl.innerHTML = '';
+  showEmptyState();
 });
 
+showEmptyState();
 loadEmotions();
 loadVoices();
 inputEl.focus();

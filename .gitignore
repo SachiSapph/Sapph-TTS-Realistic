@@ -3,6 +3,9 @@
 __pycache__/
 *.pyc
 
+# Claude Code's own local runtime state, not part of this project
+.claude/
+
 # Vendored upstream repo (clone fresh, see TTS-Handler/README.md, not ours to version)
 TTS-Handler/GPT-SoVITS/
 
