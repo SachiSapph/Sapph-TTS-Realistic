@@ -269,11 +269,23 @@ Three default voices ship with the repo (synthetic, Apache-2.0 licensed via
 female, one male, one alternate. Pick between them from the chat demo's
 dropdown, or pass `voice=` directly to the engine.
 
-Want your own voice instead? Drop an audio file (wav/mp3/m4a/flac/ogg)
-into `TTS-Handler/voices/<name>/` and it's picked up automatically,
-transcript auto-generated too, no manual labeling step. Full details in
-[TTS-Handler's README](TTS-Handler/README.md#adding-a-voice). Only clone a
-voice you actually have the rights to use.
+Want your own voice instead? Two ways: drop an audio file straight into
+`TTS-Handler/voices/` (`voices/my_voice.wav`), or give it its own subfolder
+(`voices/my_voice/reference.wav`). Either way it's picked up automatically,
+transcript auto-generated too, no manual labeling step.
+
+- **Supported formats**: wav, mp3, m4a, flac, ogg. Anything not natively
+  readable (m4a, notably) is transcoded to WAV automatically.
+- **Clip length**: GPT-SoVITS itself requires **3-10 seconds**, a hard
+  limit of its pretrained model, not something this project can widen.
+  You don't have to hit that window yourself though: drop in **up to about
+  a minute** (an ordinary voice memo is fine) and a natural speech pause
+  inside the 3-10s window is found and extracted automatically. Only a
+  clip with no such pause anywhere, or over a minute long, gets skipped
+  (with a clear reason logged to the console).
+
+Full details in [TTS-Handler's README](TTS-Handler/README.md#adding-a-voice).
+Only clone a voice you actually have the rights to use.
 
 ## Troubleshooting
 
@@ -285,11 +297,13 @@ voice you actually have the rights to use.
   doesn't need `torchcodec` at all.
 - **`UnicodeEncodeError` mid-generation**: see the `PYTHONUTF8`/
   `PYTHONIOENCODING` fix in step 7 above.
-- **Reference audio outside the 3-10 second range**: GPT-SoVITS requires
-  voice reference clips in that window. Use a single natural, unspliced
-  utterance, don't concatenate different sentences together to hit the
-  minimum, that produces muddled output. Pad with trailing silence if you
-  need to reach 3 seconds.
+- **A voice you added isn't showing up in the voice list**: check the
+  server console for a `Skipping voice '...'` warning explaining why.
+  GPT-SoVITS requires the actual clip used to be 3-10 seconds; anything up
+  to about a minute long gets auto-trimmed to a natural pause inside that
+  window automatically, so this usually only happens for a clip with no
+  pause anywhere in range, or one over a minute long. See
+  [Voices](#voices) above.
 - **Static or noise in generated audio that isn't in your source
   recording**: check `is_half` in `tts_infer.yaml`, see step 8 above.
 - **`git push` fails with a permission error** to a repo you do own: your
