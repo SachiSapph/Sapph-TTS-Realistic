@@ -48,22 +48,30 @@ class TTSEngine:
         self._pipeline = None  # loaded lazily in load()
 
     def load(self):
-        """Load the model onto GPU. Call once at server startup, not per-request."""
-        # GPT-SoVITS's config resolves its own relative paths (bert_base_path,
-        # t2s_weights_path, etc.) against its own repo root, mirroring what
-        # its own api_v2.py does at import time.
+        """Load the model onto GPU. Call once at server startup, not per-request.
+
+        GPT-SoVITS's own config resolves several of its asset paths as bare
+        relative strings against the process cwd, so cwd is temporarily
+        pointed at GPT-SoVITS's own repo root for the duration of this call
+        only, then restored, so embedding this engine inside a larger app
+        doesn't leave that app's own relative-path file access broken for
+        the rest of the process's life.
+        """
+        original_cwd = os.getcwd()
         os.chdir(GPT_SOVITS_ROOT)
         sys.path.append(str(GPT_SOVITS_ROOT))
         sys.path.append(str(GPT_SOVITS_ROOT / "GPT_SoVITS"))
+        try:
+            from GPT_SoVITS.TTS_infer_pack.TTS import TTS, TTS_Config
 
-        from GPT_SoVITS.TTS_infer_pack.TTS import TTS, TTS_Config
-
-        config = TTS_Config(self.config_path)
-        if self.gpt_weights_path:
-            config.t2s_weights_path = self.gpt_weights_path
-        if self.sovits_weights_path:
-            config.vits_weights_path = self.sovits_weights_path
-        self._pipeline = TTS(config)
+            config = TTS_Config(self.config_path)
+            if self.gpt_weights_path:
+                config.t2s_weights_path = self.gpt_weights_path
+            if self.sovits_weights_path:
+                config.vits_weights_path = self.sovits_weights_path
+            self._pipeline = TTS(config)
+        finally:
+            os.chdir(original_cwd)
 
     def generate(
         self,

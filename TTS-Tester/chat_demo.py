@@ -1,10 +1,10 @@
 """
 Chat+voice test harness for Sapph-TTS: type a message, get an LLM reply
-(Gemini), hear it spoken through the TTS-Handler engine in a selected
-emotion preset. Exists to test the TTS pipeline with realistic, varied
-conversational text instead of hand-picked one-off lines. The persona
-below is a demo character for exercising the pipeline, not tied to any
-specific production character, swap PERSONA_PROMPT for your own.
+(Gemini), hear it spoken through the TTS-Handler engine in a selected voice
+and emotion. Exists to test the TTS pipeline with realistic, varied
+conversational text instead of hand-picked one-off lines. PERSONA_PROMPT
+below is a generic assistant persona written for this demo only, not
+modeled on any specific character, swap it for your own.
 
 Run via run.bat, or manually:
     uvicorn chat_demo:app --host 127.0.0.1 --port 3001
@@ -51,9 +51,9 @@ GEMINI_MODELS = [
 ]
 
 PERSONA_PROMPT = (
-    "You are Sapph, a playful, sharp-witted AI VTuber demo character. "
-    "Keep replies short and conversational (1-3 sentences), like a real "
-    "chat, not an essay. Match the requested emotional tone in your "
+    "You are a helpful voice assistant demonstrating a text-to-speech "
+    "engine. Keep replies short and conversational (1-3 sentences), like a "
+    "real chat, not an essay. Match the requested emotional tone in your "
     "wording, not just your punctuation. If a reaction like a laugh, sigh, "
     "gasp, or grumble fits, write it phonetically as part of the sentence, "
     "never as a stage direction like '*laughs*' or 'sighs', since the "
@@ -143,6 +143,28 @@ def list_emotions():
 @app.get("/voices")
 def get_voices():
     return {"voices": list(list_voices().keys())}
+
+
+class TestVoiceRequest(BaseModel):
+    voice: str
+    emotion: str = "neutral"
+
+
+TEST_VOICE_LINE = "Hi there, this is a quick test of this voice and tone."
+
+
+@app.post("/test_voice")
+def test_voice(req: TestVoiceRequest):
+    """Generates a short canned line in the given voice/emotion, no LLM call
+    involved, so a voice (default or freshly-uploaded) can be previewed
+    without needing a Gemini API key configured yet."""
+    try:
+        audio_bytes = engine.generate(TEST_VOICE_LINE, emotion=req.emotion, voice=req.voice)
+    except KeyError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"TTS generation failed: {e}")
+    return Response(content=audio_bytes, media_type="audio/wav")
 
 
 @app.get("/settings")

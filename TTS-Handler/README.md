@@ -63,7 +63,7 @@ engine.generate("Hello there!", emotion="happy", voice="kokoro_male")
 
 ## Adding a voice
 
-Drop an audio file (wav/mp3/m4a/flac) into `voices/<your_voice_name>/`:
+Drop an audio file (wav/mp3/m4a/flac/ogg) into `voices/<your_voice_name>/`:
 
 ```
 voices/

@@ -40,6 +40,10 @@ and it's picked up automatically, transcript included: no manual labeling
 step. See [TTS-Handler's README](TTS-Handler/README.md#adding-a-voice) for
 details. Only clone a voice you actually have the rights to use.
 
+Test any voice, default or your own, straight from TTS-Tester's Settings
+panel: pick it from the dropdown and hit Play sample, no chat message or
+API key needed.
+
 ## License
 
 GPT-SoVITS itself is MIT-licensed. This project's own code (everything

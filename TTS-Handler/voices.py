@@ -1,19 +1,24 @@
 """
 Voice registry: auto-discovers voices from the voices/ folder. Each voice is
-a subfolder with one reference audio file (wav/mp3/m4a/flac) and, optionally,
-a prompt.txt with its exact transcript. Adding a voice really is just adding
-an audio file to a new subfolder here: if prompt.txt is missing, it's
-auto-transcribed once with faster-whisper (already a GPT-SoVITS dependency)
-and cached to prompt.txt next to the audio, no manual transcription step.
+a subfolder with one reference audio file (wav/mp3/m4a/flac/ogg) and,
+optionally, a prompt.txt with its exact transcript. Adding a voice really is
+just adding an audio file to a new subfolder here: if prompt.txt is missing,
+it's auto-transcribed once with faster-whisper (already a GPT-SoVITS
+dependency) and cached to prompt.txt next to the audio, no manual
+transcription step. To skip auto-transcription (e.g. you already know the
+exact wording), just write that prompt.txt file yourself before first use.
 """
 
+import logging
 from dataclasses import dataclass
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 VOICES_DIR = PROJECT_ROOT / "voices"
 
-AUDIO_EXTENSIONS = (".wav", ".mp3", ".m4a", ".flac")
+AUDIO_EXTENSIONS = (".wav", ".mp3", ".m4a", ".flac", ".ogg")
 
 _whisper_model = None  # lazy-loaded, only needed the first time a voice has no prompt.txt yet
 
@@ -31,8 +36,13 @@ def _transcribe(audio_path: Path) -> str:
         from faster_whisper import WhisperModel
 
         _whisper_model = WhisperModel("base.en", compute_type="int8")
-    segments, _ = _whisper_model.transcribe(str(audio_path))
-    return " ".join(segment.text.strip() for segment in segments).strip()
+    logger.info("Auto-transcribing %s ...", audio_path.name)
+    segments, _ = _whisper_model.transcribe(str(audio_path), vad_filter=True)
+    text = " ".join(segment.text.strip() for segment in segments).strip()
+    if not text:
+        raise RuntimeError(f"Whisper produced no transcript for {audio_path}")
+    logger.info("Transcribed %s -> %r", audio_path.name, text[:80])
+    return text
 
 
 def list_voices() -> dict[str, Voice]:
@@ -50,7 +60,10 @@ def list_voices() -> dict[str, Voice]:
         audio_path = audio_files[0]
         transcript_path = folder / "prompt.txt"
         if transcript_path.exists():
-            prompt_text = transcript_path.read_text(encoding="utf-8").strip()
+            # utf-8-sig strips a leading BOM if present (e.g. from Notepad or
+            # PowerShell's Set-Content -Encoding utf8) while still reading
+            # plain UTF-8 files with no BOM correctly.
+            prompt_text = transcript_path.read_text(encoding="utf-8-sig").strip()
         else:
             prompt_text = _transcribe(audio_path)
             transcript_path.write_text(prompt_text, encoding="utf-8")

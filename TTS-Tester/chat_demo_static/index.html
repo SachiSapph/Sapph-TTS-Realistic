@@ -169,6 +169,20 @@
     opacity: 0.5;
     margin-top: 5px;
   }
+  .field .hint a {
+    color: #c9a6ff;
+    opacity: 1;
+  }
+  .test-voice-row {
+    display: flex;
+    gap: 8px;
+  }
+  .test-voice-row select {
+    flex: 1;
+  }
+  .test-voice-row button {
+    white-space: nowrap;
+  }
   .modal-actions {
     display: flex;
     justify-content: flex-end;
@@ -202,6 +216,9 @@
       <h2 id="modal-title">Settings</h2>
       <div class="field">
         <label for="api-key">Gemini API key</label>
+        <div class="hint">
+          <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Get a free Gemini API key</a>
+        </div>
         <input id="api-key" type="password" placeholder="Enter to update, leave blank to keep current" autocomplete="off">
         <div class="hint" id="api-key-hint">No key set yet.</div>
       </div>
@@ -212,6 +229,14 @@
       <div class="field">
         <label for="default-emotion">Default voice tone</label>
         <select id="default-emotion"></select>
+      </div>
+      <div class="field">
+        <label for="test-voice">Test a voice</label>
+        <div class="test-voice-row">
+          <select id="test-voice"></select>
+          <button id="test-voice-play" type="button">Play sample</button>
+        </div>
+        <div class="hint" id="test-voice-hint">Plays a short sample line, no API key needed. Includes any voice you've added to TTS-Handler/voices/.</div>
       </div>
       <div id="settings-status"></div>
       <div class="modal-actions">
@@ -224,7 +249,7 @@
   <div id="messages"></div>
 
   <footer>
-    <input id="input" type="text" placeholder="Say something to Sapph..." autocomplete="off">
+    <input id="input" type="text" placeholder="Type a message..." autocomplete="off">
     <button id="send">Send</button>
   </footer>
 
@@ -241,6 +266,9 @@ const apiKeyEl = document.getElementById('api-key');
 const apiKeyHintEl = document.getElementById('api-key-hint');
 const defaultEmotionEl = document.getElementById('default-emotion');
 const defaultVoiceEl = document.getElementById('default-voice');
+const testVoiceEl = document.getElementById('test-voice');
+const testVoicePlayEl = document.getElementById('test-voice-play');
+const testVoiceHintEl = document.getElementById('test-voice-hint');
 const settingsStatusEl = document.getElementById('settings-status');
 const settingsCancelEl = document.getElementById('settings-cancel');
 const settingsSaveEl = document.getElementById('settings-save');
@@ -262,6 +290,34 @@ async function loadVoices() {
   voiceNames = data.voices;
   voiceEl.innerHTML = voiceNames.map(v => `<option value="${v}">${v}</option>`).join('');
   defaultVoiceEl.innerHTML = voiceEl.innerHTML;
+  testVoiceEl.innerHTML = voiceEl.innerHTML;
+}
+
+async function playTestVoice() {
+  const originalLabel = testVoicePlayEl.textContent;
+  testVoicePlayEl.disabled = true;
+  testVoicePlayEl.textContent = 'Generating...';
+  testVoiceHintEl.textContent = '';
+  try {
+    const emotion = defaultEmotionEl.value === 'auto' ? 'neutral' : defaultEmotionEl.value;
+    const res = await fetch('/test_voice', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ voice: testVoiceEl.value, emotion })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${res.status}`);
+    }
+    const blob = await res.blob();
+    const audio = new Audio(URL.createObjectURL(blob));
+    audio.play().catch(() => {});
+  } catch (e) {
+    testVoiceHintEl.textContent = `Error: ${e.message}`;
+  } finally {
+    testVoicePlayEl.disabled = false;
+    testVoicePlayEl.textContent = originalLabel;
+  }
 }
 
 async function openSettings() {
@@ -275,6 +331,8 @@ async function openSettings() {
   emotionEl.value = data.default_emotion;
   defaultVoiceEl.value = data.default_voice;
   voiceEl.value = data.default_voice;
+  testVoiceEl.value = data.default_voice;
+  testVoiceHintEl.textContent = "Plays a short sample line, no API key needed. Includes any voice you've added to TTS-Handler/voices/.";
   settingsStatusEl.textContent = '';
   settingsStatusEl.className = '';
   modalBackdrop.classList.add('open');
@@ -314,6 +372,7 @@ async function saveSettings() {
 gearEl.addEventListener('click', openSettings);
 settingsCancelEl.addEventListener('click', closeSettings);
 settingsSaveEl.addEventListener('click', saveSettings);
+testVoicePlayEl.addEventListener('click', playTestVoice);
 modalBackdrop.addEventListener('click', (e) => {
   if (e.target === modalBackdrop) closeSettings();
 });
