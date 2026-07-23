@@ -315,6 +315,8 @@ def chat(req: ChatRequest):
         # removing them, for this source. Keep inference/enhance.py around
         # in case a future lower-quality source needs it, but don't call it
         # by default.
+    except KeyError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"TTS generation failed: {e}")
 

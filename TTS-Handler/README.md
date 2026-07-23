@@ -77,10 +77,17 @@ voices/
 
 That's it. On first use it's auto-transcribed with `faster-whisper` and the
 transcript cached to `prompt.txt` next to the audio, so there's no manual
-labeling step. Use a clean, natural, unspliced clip (a few seconds of one
-continuous utterance works best; don't concatenate different sentences
-together). Only add a voice you actually have the rights to use: your own
-voice, a permissively-licensed source, or someone else's with their
+labeling step.
+
+**The clip must be 3-10 seconds long**, GPT-SoVITS's own hard requirement.
+Anything outside that range is skipped at startup with a warning in the
+console (it just won't show up as a voice option, rather than failing
+later when you try to use it) so check there if a voice you added seems to
+be missing. Use a clean, natural, unspliced single continuous utterance,
+don't concatenate different sentences together to hit the minimum length,
+that produces muddled output, pad with trailing silence instead if your
+clip is a little short. Only add a voice you actually have the rights to
+use: your own voice, a permissively-licensed source, or someone else's with their
 explicit consent.
 
 If auto-transcription gets something wrong, just edit the generated
