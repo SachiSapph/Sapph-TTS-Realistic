@@ -4,8 +4,8 @@ Inference wrapper around GPT-SoVITS.
 Verified against the real repo (RVC-Boss/GPT-SoVITS, api_v2.py): the
 pipeline is `TTS_Config(config_path)` -> `TTS(config)`, run via
 `tts_pipeline.run(req)` where `req` is a dict of the params below. It
-returns a generator of `(sample_rate, numpy_array)` chunks, not raw bytes —
-this wrapper takes the first chunk (non-streaming) and encodes it to WAV.
+returns a generator of `(sample_rate, numpy_array)` chunks, not raw bytes,
+so this wrapper takes the first chunk (non-streaming) and encodes it to WAV.
 """
 
 import os
@@ -18,6 +18,7 @@ import soundfile as sf
 
 from emotion_vectors.presets import EmotionPreset, get_preset
 from inference import prosody_fx
+from voices import get_voice
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 GPT_SOVITS_ROOT = PROJECT_ROOT / "GPT-SoVITS"
@@ -49,7 +50,7 @@ class TTSEngine:
     def load(self):
         """Load the model onto GPU. Call once at server startup, not per-request."""
         # GPT-SoVITS's config resolves its own relative paths (bert_base_path,
-        # t2s_weights_path, etc.) against its own repo root — mirroring what
+        # t2s_weights_path, etc.) against its own repo root, mirroring what
         # its own api_v2.py does at import time.
         os.chdir(GPT_SOVITS_ROOT)
         sys.path.append(str(GPT_SOVITS_ROOT))
@@ -68,13 +69,18 @@ class TTSEngine:
         self,
         text: str,
         emotion: EmotionPreset | str = "neutral",
+        voice: str | None = None,
         text_lang: str = "en",
     ) -> bytes:
         """
         text: what to say
         emotion: either an EmotionPreset or a preset name (see
-            emotion_vectors/presets.py) — supplies the reference audio clip,
-            its transcript, and sampling params that carry the target tone
+            emotion_vectors/presets.py), supplies the sampling params that
+            carry the target tone (and a default reference clip, used only
+            when voice is None)
+        voice: name of a voice from voices/ (see voices.py), supplies the
+            reference audio clip and its transcript. Leave as None to use
+            emotion's own reference clip instead.
         Returns: WAV audio bytes
         """
         if isinstance(emotion, str):
@@ -83,11 +89,19 @@ class TTSEngine:
         if self._pipeline is None:
             raise RuntimeError("Call .load() before generate().")
 
+        if voice is not None:
+            selected_voice = get_voice(voice)
+            ref_audio_path = selected_voice.ref_audio_path
+            prompt_text = selected_voice.prompt_text
+        else:
+            ref_audio_path = emotion.ref_audio_path
+            prompt_text = emotion.prompt_text
+
         req = {
             "text": text,
             "text_lang": text_lang,
-            "ref_audio_path": str(PROJECT_ROOT / emotion.ref_audio_path),
-            "prompt_text": emotion.prompt_text,
+            "ref_audio_path": str(PROJECT_ROOT / ref_audio_path),
+            "prompt_text": prompt_text,
             "prompt_lang": emotion.prompt_lang,
             "top_k": emotion.top_k,
             "top_p": emotion.top_p,
@@ -97,7 +111,7 @@ class TTSEngine:
         generator = self._pipeline.run(req)
         sample_rate, audio_data = next(generator)
 
-        # GPT-SoVITS returns raw int16 PCM, not normalized float — post-
+        # GPT-SoVITS returns raw int16 PCM, not normalized float, post-
         # effects need to work in proper [-1, 1] float space, or gain/
         # tremor arithmetic silently corrupts the scale (confirmed directly:
         # applying gain to int16 data produced peak=1.0/rms=0.92, i.e.

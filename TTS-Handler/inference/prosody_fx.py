@@ -1,13 +1,13 @@
 """
 Post-processing prosody effects, grounded in actual speech-emotion research
-(acoustic correlates of emotion — see project memory for citations), not
+(acoustic correlates of emotion, see project memory for citations), not
 guesswork. GPT-SoVITS's exposed knobs (top_k/top_p/temperature/speed_factor)
 can't touch jitter or shimmer, which research identifies as a real marker
 for fear/nervousness specifically (trembling instability, not just "faster
 and higher").
 
 A pitch-jitter variant (via WORLD vocoder analysis-resynthesis) was tried
-and rejected: measured directly, it was unreliable — the relationship
+and rejected: measured directly, it was unreliable, the relationship
 between the jitter_amount parameter and actual measured frame-to-frame
 pitch instability was non-monotonic (0.05 -> 3.21%, 0.10 -> 3.07%, 0.15 ->
 3.93%), meaning it can't be tuned predictably, on top of this project's

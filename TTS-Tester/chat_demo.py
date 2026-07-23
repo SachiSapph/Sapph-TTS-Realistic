@@ -4,12 +4,12 @@ Chat+voice test harness for Sapph-TTS: type a message, get an LLM reply
 emotion preset. Exists to test the TTS pipeline with realistic, varied
 conversational text instead of hand-picked one-off lines. The persona
 below is a demo character for exercising the pipeline, not tied to any
-specific production character — swap PERSONA_PROMPT for your own.
+specific production character, swap PERSONA_PROMPT for your own.
 
 Run via run.bat, or manually:
     uvicorn chat_demo:app --host 127.0.0.1 --port 3001
 Then open http://127.0.0.1:3001 and set your Gemini API key from the
-settings (gear icon) — saved locally to settings.local.json, never
+settings (gear icon), saved locally to settings.local.json, never
 committed (see .gitignore).
 """
 
@@ -27,7 +27,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 SETTINGS_PATH = PROJECT_ROOT / "settings.local.json"
 
 # TTS-Handler is a sibling project (the engine), not a subpackage of this
-# tester — add it to sys.path rather than merging the two together, so
+# tester, add it to sys.path rather than merging the two together, so
 # each half stays independently usable.
 TTS_HANDLER_ROOT = PROJECT_ROOT.parent / "TTS-Handler"
 sys.path.insert(0, str(TTS_HANDLER_ROOT))
@@ -35,9 +35,10 @@ sys.path.insert(0, str(TTS_HANDLER_ROOT))
 from emotion_vectors.presets import PRESETS  # noqa: E402
 from inference import enhance  # noqa: E402
 from inference.generate import TTSEngine  # noqa: E402
+from voices import list_voices  # noqa: E402
 
 # The free tier gives each model its own separate, fairly small daily quota
-# (e.g. 20 requests/day for gemini-2.5-flash-lite) — normal chat testing
+# (e.g. 20 requests/day for gemini-2.5-flash-lite), normal chat testing
 # burns through that fast. Tried in order; a 429/503 on one moves to the
 # next rather than failing the whole request. Fastest/newest first, since
 # newer models tend to have fresher (less-competed-for) quota.
@@ -54,8 +55,8 @@ PERSONA_PROMPT = (
     "Keep replies short and conversational (1-3 sentences), like a real "
     "chat, not an essay. Match the requested emotional tone in your "
     "wording, not just your punctuation. If a reaction like a laugh, sigh, "
-    "gasp, or grumble fits, write it phonetically as part of the sentence "
-    "— never as a stage direction like '*laughs*' or 'sighs', since the "
+    "gasp, or grumble fits, write it phonetically as part of the sentence, "
+    "never as a stage direction like '*laughs*' or 'sighs', since the "
     "voice engine will pronounce those as literal words instead of making "
     "the sound. Good phonetic spellings the voice engine handles well: "
     "laugh -> 'Hahaha!' or 'Heheh.'; sigh -> 'Haaah...' or 'Phew...'; "
@@ -63,7 +64,7 @@ PERSONA_PROMPT = (
     "'Eww...', 'Pfft.', or 'Hmph.'. For high-energy "
     "tones (excited, angry, afraid, playful), break your reply into short, "
     "separate sentences with real full stops rather than one long run-on "
-    "sentence — the voice engine adds a natural pause between sentences, "
+    "sentence, the voice engine adds a natural pause between sentences, "
     "which reads as more clipped/urgent. For calmer tones (sad, neutral), "
     "fewer, longer sentences read as more measured."
 )
@@ -104,7 +105,7 @@ def startup():
     settings = load_settings()
     init_gemini_client(settings.get("gemini_api_key"))
     engine.load()
-    # enhance.load() intentionally not called — see the comment in /chat
+    # enhance.load() intentionally not called, see the comment in /chat
     # for why VoiceFixer is off by default now.
     # Pay GPT-SoVITS's one-time CUDA warm-up cost (~5s) now, not on the
     # user's first real message.
@@ -114,6 +115,7 @@ def startup():
 class ChatRequest(BaseModel):
     message: str
     emotion: str = "neutral"
+    voice: str = "kokoro_female"
 
 
 class ChatResponse(BaseModel):
@@ -125,6 +127,7 @@ class ChatResponse(BaseModel):
 class SettingsRequest(BaseModel):
     gemini_api_key: str | None = None
     default_emotion: str = "neutral"
+    default_voice: str = "kokoro_female"
 
 
 @app.get("/")
@@ -137,6 +140,11 @@ def list_emotions():
     return {"emotions": ["auto"] + list(PRESETS.keys())}
 
 
+@app.get("/voices")
+def get_voices():
+    return {"voices": list(list_voices().keys())}
+
+
 @app.get("/settings")
 def get_settings():
     settings = load_settings()
@@ -145,6 +153,7 @@ def get_settings():
         "gemini_api_key_masked": ("..." + key[-4:]) if key else "",
         "gemini_api_key_set": bool(key),
         "default_emotion": settings.get("default_emotion", "auto"),
+        "default_voice": settings.get("default_voice", "kokoro_female"),
     }
 
 
@@ -154,6 +163,7 @@ def update_settings(req: SettingsRequest):
     if req.gemini_api_key:
         settings["gemini_api_key"] = req.gemini_api_key
     settings["default_emotion"] = req.default_emotion
+    settings["default_voice"] = req.default_voice
     save_settings(settings)
     init_gemini_client(settings.get("gemini_api_key"))
     return {"status": "saved"}
@@ -220,7 +230,7 @@ def chat(req: ChatRequest):
     if gemini_client is None:
         raise HTTPException(
             status_code=400,
-            detail="No Gemini API key configured yet — set one in Settings (gear icon).",
+            detail="No Gemini API key configured yet, set one in Settings (gear icon).",
         )
 
     conversation_history.append({"role": "user", "text": req.message})
@@ -233,8 +243,8 @@ def chat(req: ChatRequest):
     conversation_history.append({"role": "assistant", "text": reply_text})
 
     try:
-        audio_bytes = engine.generate(reply_text, emotion=emotion_used)
-        # VoiceFixer is intentionally NOT applied here — measured directly:
+        audio_bytes = engine.generate(reply_text, emotion=emotion_used, voice=req.voice)
+        # VoiceFixer is intentionally NOT applied here, measured directly:
         # once the reference clip itself is properly denoised, raw output
         # has a cleaner noise floor (315x peak-to-floor ratio) than
         # VoiceFixer-processed output (179x). It was adding artifacts, not

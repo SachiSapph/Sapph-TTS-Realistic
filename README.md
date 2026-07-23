@@ -1,34 +1,48 @@
 # Sapph-TTS
 
-A local, self-hosted text-to-speech system built on
-[GPT-SoVITS](https://github.com/RVC-Boss/GPT-SoVITS) — zero-shot voice
-cloning from a short reference clip, with named emotion presets grounded in
-real speech-emotion research rather than arbitrary parameter tweaking. Runs
-entirely on your own machine: no API key, no per-character billing, no
-third-party ToS on the voice itself.
+**v1.0.1**: early days, expect rough edges. Bug reports and pull requests welcome.
 
-Two clearly separated parts:
+A realistic, local text-to-speech engine with actual emotional range and a
+behavioral system on top, not just a flat voice reading text out loud. Built
+on [GPT-SoVITS](https://github.com/RVC-Boss/GPT-SoVITS) for zero-shot voice
+cloning, plus a layer of research-grounded emotion presets and a demo chat
+app that lets a voice switch tone naturally mid-conversation instead of
+staying locked to one setting.
 
-- **[TTS-Handler](TTS-Handler)** — the actual TTS engine. Use this on its own
-  if you just want text-to-speech, either as a Python library (`TTSEngine`)
-  or a small HTTP API (`POST /generate {text, emotion} -> audio`).
-- **[TTS-Tester](TTS-Tester)** — a chat+voice demo built on top of
-  TTS-Handler, for trying it out conversationally (LLM chat via Gemini,
-  spoken back through the engine) rather than one line at a time.
+Runs entirely on your own machine. No API key for the voice itself, no
+per-character or per-minute billing, no cloud dependency, no ToS on the
+voice you use. Compared to hosted options like Fish Audio or ElevenLabs,
+the tradeoff is simple: you do the setup work once, and in exchange you get
+emotion control that's actually tuned and explainable (grounded in real
+acoustic-correlates-of-emotion research, documented in the code, not a
+black-box "style" slider) instead of a handful of opaque presets behind a
+paywall.
 
-Start with `TTS-Handler`'s own README for setup — `TTS-Tester` is optional
-and depends on it.
+## What's inside
 
-## Bring your own voice
+Two clearly separated parts, each independently usable:
 
-This repo ships **no voice audio**. GPT-SoVITS clones whatever reference
-clip you give it, so you provide that yourself — see
-[`TTS-Handler/README.md`](TTS-Handler/README.md#adding-a-voice). Only clone a
-voice you actually have the rights to use.
+- **[TTS-Handler](TTS-Handler)**: the engine. Text in, spoken audio out,
+  as a Python library or a small HTTP API.
+- **[TTS-Tester](TTS-Tester)**: a chat demo built on top of it. Type a
+  message, an LLM replies, TTS-Handler speaks it back in whatever emotion
+  fits, chosen automatically or picked by hand.
+
+## Voices
+
+Three default voices ship with the repo (synthetic, Apache-2.0 licensed via
+[Kokoro](https://github.com/hexgrad/kokoro), fully copyright-free): one
+female, one male, one alternate. Pick between them from the chat demo's
+dropdown, or pass `voice=` directly to the engine.
+
+Want your own voice instead? Drop an audio file into `TTS-Handler/voices/<name>/`
+and it's picked up automatically, transcript included: no manual labeling
+step. See [TTS-Handler's README](TTS-Handler/README.md#adding-a-voice) for
+details. Only clone a voice you actually have the rights to use.
 
 ## License
 
 GPT-SoVITS itself is MIT-licensed. This project's own code (everything
 outside the `GPT-SoVITS/` vendor folder, which you clone in yourself per the
-setup instructions) has no license file yet — treat it as all-rights-reserved
+setup instructions) has no license file yet, treat it as all-rights-reserved
 unless the repo owner adds one.

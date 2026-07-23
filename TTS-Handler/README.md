@@ -1,29 +1,38 @@
 # TTS-Handler
 
-The TTS engine. A local, self-hosted text-to-speech system built on
-[GPT-SoVITS](https://github.com/RVC-Boss/GPT-SoVITS) (MIT license) — **zero-shot
-voice cloning**: give it a short (3-10s) reference clip of a voice plus its
-transcript, and it synthesizes new lines in that voice, no training required.
-An optional fine-tuning path exists too (GPT-SoVITS's own scripts), for a
-stronger match than zero-shot alone gives.
+The engine behind [Sapph-TTS](..). A local, self-hosted text-to-speech
+system built on [GPT-SoVITS](https://github.com/RVC-Boss/GPT-SoVITS) (MIT
+license): **zero-shot voice cloning**, give it a short reference clip of a
+voice plus its transcript, and it synthesizes new lines in that voice, no
+training required. An optional fine-tuning path exists too (GPT-SoVITS's
+own scripts), for a stronger match than zero-shot alone gives.
 
-Emotion is driven by **reference-clip prosody and sampling parameters**, not
-a fixed emotion vector — [`emotion_vectors/presets.py`](emotion_vectors/presets.py)
+Emotion is driven by **reference-clip prosody plus sampling parameters**,
+not a fixed emotion vector. [`emotion_vectors/presets.py`](emotion_vectors/presets.py)
 maps a name (`happy`, `sad`, `angry`, `afraid`, `disgusted`, `excited`,
-`playful`, `neutral`) to a reference clip + its transcript + sampling params
-(temperature, speed, etc.), grounded in real acoustic-correlates-of-emotion
-research rather than arbitrary guesses. See the comments in that file for the
-reasoning per emotion.
+`playful`, `neutral`) to sampling params (temperature, speed, gain, a
+shimmer post-effect for fear) chosen from real acoustic-correlates-of-emotion
+research, not arbitrary guesses. See the comments in that file for the
+reasoning behind each one.
 
-This repo ships **no voice audio**. Bring your own reference clip — see
-[Adding a voice](#adding-a-voice) below. Only use a voice you actually have
-the rights to clone (your own voice, or someone else's with their explicit
-consent — cloning a voice without consent isn't something this project
-supports).
+## Voices
+
+Three default voices ship with this repo, synthesized with
+[Kokoro](https://github.com/hexgrad/kokoro) (Apache 2.0, fully
+copyright-free, no real person's voice involved): `kokoro_female`,
+`kokoro_male`, `kokoro_alt`. List what's available and generate with a
+specific one:
+
+```python
+from voices import list_voices
+print(list(list_voices().keys()))
+
+engine.generate("Hello there!", emotion="happy", voice="kokoro_male")
+```
 
 ## Requirements
 
-- Python 3.10–3.12 (GPT-SoVITS's own constraint — not 3.13+)
+- Python 3.10-3.12 (GPT-SoVITS's own constraint, not 3.13+)
 - A CUDA-capable GPU is strongly recommended (CPU inference works but is slow)
 - `ffmpeg` on your PATH
 
@@ -43,23 +52,18 @@ supports).
    pip install -r requirements.txt
    pip install -r GPT-SoVITS/requirements.txt
    ```
-   Install `torch`/`torchaudio` matching your CUDA driver **first**, separately
-   — see the comment at the top of `requirements.txt`.
+   Install `torch`/`torchaudio` matching your CUDA driver **first**, separately.
+   See the comment at the top of `requirements.txt`.
 
-3. Add a voice (see below), then point `emotion_vectors/presets.py`'s `_REF`
-   and `_TEXT` at it.
-
-4. Smoke-test everything end to end:
+3. Smoke-test everything end to end:
    ```bash
    python scripts/test_presets.py
    ```
-   Generates one line per emotion preset into `test_audio/`.
+   Generates one line per emotion preset (using the default voice) into `test_audio/`.
 
 ## Adding a voice
 
-Drop a clean, natural, unspliced reference clip (3–10 seconds, one single
-utterance — don't concatenate different sentences to hit the minimum length)
-into `voices/<your_voice_name>/`, e.g.:
+Drop an audio file (wav/mp3/m4a/flac) into `voices/<your_voice_name>/`:
 
 ```
 voices/
@@ -67,11 +71,16 @@ voices/
     └── reference.wav
 ```
 
-Then update `_REF` (path to the clip) and `_TEXT` (its exact transcript) in
-`emotion_vectors/presets.py`. Every preset shares that one reference clip by
-default; for genuinely distinct per-emotion prosody, record separate short
-clips actually performed in each emotion and give each preset its own
-`ref_audio_path`/`prompt_text` instead of sharing `_REF`.
+That's it. On first use it's auto-transcribed with `faster-whisper` and the
+transcript cached to `prompt.txt` next to the audio, so there's no manual
+labeling step. Use a clean, natural, unspliced clip (a few seconds of one
+continuous utterance works best; don't concatenate different sentences
+together). Only add a voice you actually have the rights to use: your own
+voice, a permissively-licensed source, or someone else's with their
+explicit consent.
+
+If auto-transcription gets something wrong, just edit the generated
+`prompt.txt` by hand, it's read from disk, not regenerated once it exists.
 
 ## Using it
 
@@ -81,7 +90,7 @@ from inference.generate import TTSEngine
 
 engine = TTSEngine(config_path="GPT-SoVITS/GPT_SoVITS/configs/tts_infer.yaml")
 engine.load()
-audio_bytes = engine.generate("Hello there!", emotion="happy")  # WAV bytes
+audio_bytes = engine.generate("Hello there!", emotion="happy", voice="kokoro_female")
 ```
 
 Or as an HTTP API:
@@ -89,7 +98,8 @@ Or as an HTTP API:
 uvicorn server:app --host 0.0.0.0 --port 3100
 ```
 ```
-POST /generate {"text": "Hello there!", "emotion": "happy"} -> WAV audio bytes
+POST /generate {"text": "Hello there!", "emotion": "happy", "voice": "kokoro_female"} -> WAV audio bytes
+GET  /voices    -> {"voices": ["kokoro_alt", "kokoro_female", "kokoro_male"]}
 GET  /health    -> {"status": "ok", "engine_loaded": true}
 ```
 
@@ -100,8 +110,8 @@ of this engine.
 
 GPT-SoVITS's English frontend spells out unknown words 3 letters or shorter
 one letter at a time, and falls back to a neural guess for longer unknown
-words — both can mangle onomatopoeia ("eek", "hmph", "pfft"). Fix pronunciation
+words, both can mangle onomatopoeia ("eek", "hmph", "pfft"). Fix pronunciation
 for specific words by adding a line to
 `GPT-SoVITS/GPT_SoVITS/text/engdict-hot.rep` (format: `WORD PH1 PH2 ...`,
-space-separated ARPAbet phones) — it's read fresh on every load and overrides
+space-separated ARPAbet phones), it's read fresh on every load and overrides
 both the dictionary and the guesser.

@@ -18,5 +18,5 @@ if errorlevel 1 (
 )
 
 start "" http://127.0.0.1:3001
-echo Ready — opened http://127.0.0.1:3001 in your browser.
-echo (The server keeps running in the other window titled "Sapph-TTS Server" — close it to stop.)
+echo Ready, opened http://127.0.0.1:3001 in your browser.
+echo (The server keeps running in the other window titled "Sapph-TTS Server", close it to stop.)

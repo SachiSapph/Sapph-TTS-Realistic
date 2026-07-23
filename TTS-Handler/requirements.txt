@@ -1,11 +1,11 @@
-# Core — install PyTorch matching your CUDA driver version FIRST, separately.
+# Core, install PyTorch matching your CUDA driver version FIRST, separately.
 # Do not let this file silently install a CPU-only torch build.
 #
 # torch/torchaudio 2.9+ pull in torchcodec, which has had DLL-loading issues
-# on some Windows setups — if you hit that, pin back to 2.8.0 (still has the
+# on some Windows setups, if you hit that, pin back to 2.8.0 (still has the
 # legacy soundfile-based audio loader that doesn't need torchcodec):
 #   pip install torch==2.8.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cu128
-# (swap cu128 for whatever CUDA version matches your driver/GPU — newer
+# (swap cu128 for whatever CUDA version matches your driver/GPU, newer
 # Blackwell-generation GPUs specifically need cu128 or newer for sm_120 support)
 
 fastapi
@@ -24,5 +24,5 @@ tqdm
 pyyaml
 
 # GPT-SoVITS itself: install from its own requirements.txt after cloning it
-# in (see README.md setup steps), not from this file — run it from within
+# in (see README.md setup steps), not from this file, run it from within
 # GPT-SoVITS/'s own directory to avoid version conflicts.
